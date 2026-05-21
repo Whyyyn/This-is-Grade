@@ -321,6 +321,13 @@ function escapeHtml(value) {
   }[char]));
 }
 
+els.password.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    els.form.requestSubmit();
+  }
+});
+
 els.form.addEventListener('submit', async (event) => {
   event.preventDefault();
   setStatus('抓取中');
@@ -337,7 +344,6 @@ els.form.addEventListener('submit', async (event) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '抓取失败');
     updateGrades(data);
-    els.password.value = '';
     setStatus('抓取完成', 'ok');
   } catch (error) {
     setStatus(error.message, 'bad');

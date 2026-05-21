@@ -19,14 +19,14 @@
       </section>
 
       <section class="workspace">
-        <form id="scrapeForm" class="panel login-panel" method="post" autocomplete="on">
+        <form id="scrapeForm" class="panel login-panel" method="post" autocomplete="on" action="/api/scrape">
           <div class="panel-head">
             <h2>抓取成绩</h2>
             <span id="status" class="status">待连接</span>
           </div>
           <label>
             <span>邮箱</span>
-            <input id="email" name="username" type="email" autocomplete="username email" inputmode="email" placeholder="name@example.com" />
+            <input id="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="name@example.com" />
           </label>
           <label>
             <span>密码</span>
