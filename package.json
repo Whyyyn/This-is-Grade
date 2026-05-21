@@ -1,0 +1,13 @@
+{
+  "name": "this-is-grade",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "deploy": "wrangler pages deploy public --project-name this-is-grade"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

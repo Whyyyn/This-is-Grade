@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebTESS 成绩 Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">WebTESS</p>
+          <h1>成绩 Dashboard</h1>
+        </div>
+        <button id="refreshButton" class="icon-button" title="重新载入成绩" aria-label="重新载入成绩">
+          <span>↻</span>
+        </button>
+      </section>
+
+      <section class="workspace">
+        <form id="scrapeForm" class="panel login-panel">
+          <div class="panel-head">
+            <h2>抓取成绩</h2>
+            <span id="status" class="status">待连接</span>
+          </div>
+          <label>
+            <span>邮箱</span>
+            <input id="email" type="email" autocomplete="username" placeholder="name@example.com" />
+          </label>
+          <label>
+            <span>密码</span>
+            <input id="password" type="password" autocomplete="current-password" placeholder="本地提交，不写入代码" />
+          </label>
+          <label>
+            <span>网址</span>
+            <input id="url" type="url" value="https://harts.systems/webtess/parent.jsp" />
+          </label>
+          <button class="primary" type="submit">抓取并更新</button>
+          <button id="sampleButton" class="ghost" type="button">载入示例数据</button>
+        </form>
+
+        <section class="panel average-panel">
+          <div class="panel-head">
+            <h2>四科均分</h2>
+            <span id="selectionCount" class="status">0 / 4</span>
+          </div>
+          <div class="average-value" id="averageValue">--</div>
+          <p id="averageFormula" class="muted">选择四科后计算</p>
+          <div id="subjectPicker" class="subject-picker"></div>
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="panel-head">
+            <h2>各科成绩</h2>
+            <span id="gradeCount" class="status">0 科</span>
+          </div>
+          <div id="chart" class="chart" aria-label="各科成绩柱状图"></div>
+        </section>
+
+
+        <section class="panel prediction-panel">
+          <div class="panel-head">
+            <h2>成绩预测</h2>
+            <span class="status">Preview</span>
+          </div>
+          <div class="predict-grid">
+            <label>
+              <span>科目</span>
+              <select id="predictionCourse"></select>
+            </label>
+            <label>
+              <span>栏目</span>
+              <select id="predictionCategory"></select>
+            </label>
+            <label>
+              <span>新成绩 %</span>
+              <input id="predictionScore" type="number" min="0" max="120" step="0.1" value="100" />
+            </label>
+          </div>
+          <div class="prediction-results">
+            <div>
+              <span>科目新分</span>
+              <strong id="predictedCourse">--</strong>
+            </div>
+            <div>
+              <span>四科均分</span>
+              <strong id="predictedAverage">--</strong>
+            </div>
+          </div>
+          <p id="predictionDelta" class="muted">等待成绩明细</p>
+        </section>
+
+        <section class="panel table-panel">
+          <div class="panel-head">
+            <h2>明细</h2>
+            <button id="exportButton" class="ghost compact" type="button">导出 JSON</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>科目</th>
+                  <th>原始成绩</th>
+                  <th>十分位四舍五入</th>
+                  <th>小成绩</th>
+                </tr>
+              </thead>
+              <tbody id="gradeRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
