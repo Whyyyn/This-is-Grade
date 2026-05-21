@@ -1,6 +1,6 @@
 const state = {
   grades: [],
-  selected: new Set()
+  selected: new Set(loadPinnedSubjects())
 };
 
 const fallbackGrades = [
@@ -106,6 +106,10 @@ function updateGrades(grades) {
     .filter((grade) => grade.subject && Number.isFinite(grade.score))
     .sort((a, b) => b.score - a.score);
   state.selected = new Set([...state.selected].filter((subject) => state.grades.some((grade) => grade.subject === subject)));
+  if (!state.selected.size) {
+    state.selected = new Set(state.grades.slice(0, 4).map((grade) => grade.subject));
+    savePinnedSubjects();
+  }
   render();
 }
 
@@ -150,8 +154,21 @@ function inferCategoryFromTitle(title) {
   return found ? found[0] : '';
 }
 
+function loadPinnedSubjects() {
+  try {
+    const value = JSON.parse(localStorage.getItem('pinned-subjects') || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePinnedSubjects() {
+  localStorage.setItem('pinned-subjects', JSON.stringify([...state.selected]));
+}
+
 function render() {
-  els.gradeCount.textContent = `${state.grades.length} 科`;
+  els.gradeCount.textContent = `${state.selected.size || 0} / ${state.grades.length} 展示`;
   renderPicker();
   renderAverage();
   renderPredictionControls();
@@ -167,7 +184,7 @@ function renderPicker() {
     button.type = 'button';
     button.className = 'subject-chip';
     button.dataset.active = state.selected.has(grade.subject);
-    button.textContent = `${grade.subject} ${roundCourseScore(grade.score)}`;
+    button.textContent = `${state.selected.has(grade.subject) ? '展示' : '隐藏'} · ${grade.subject} ${roundCourseScore(grade.score)}`;
     button.addEventListener('click', () => toggleSubject(grade.subject));
     els.subjectPicker.append(button);
   }
@@ -183,6 +200,7 @@ function toggleSubject(subject) {
     }
     state.selected.add(subject);
   }
+  savePinnedSubjects();
   render();
 }
 
@@ -284,25 +302,46 @@ function roundHundredths(value) {
 
 function renderChart() {
   els.chart.innerHTML = '';
-  const max = Math.max(100, ...state.grades.map((grade) => grade.score));
-  for (const grade of state.grades) {
-    const row = document.createElement('div');
-    row.className = 'bar-row';
-    const label = document.createElement('span');
-    label.className = 'bar-label';
-    label.textContent = grade.subject;
-    const track = document.createElement('div');
-    track.className = 'bar-track';
-    const fill = document.createElement('div');
-    fill.className = 'bar-fill';
-    fill.style.width = `${Math.max(2, (grade.score / max) * 100)}%`;
-    const score = document.createElement('span');
-    score.className = 'bar-score';
-    score.textContent = roundCourseScore(grade.score);
-    track.append(fill, score);
-    row.append(label, track);
-    els.chart.append(row);
+  const featured = state.grades.filter((grade) => state.selected.has(grade.subject));
+  const collapsed = state.grades.filter((grade) => !state.selected.has(grade.subject));
+
+  const featuredWrap = document.createElement('div');
+  featuredWrap.className = 'featured-courses';
+  for (const grade of featured) {
+    featuredWrap.append(createCourseCard(grade, true));
   }
+  els.chart.append(featuredWrap);
+
+  const details = document.createElement('details');
+  details.className = 'collapsed-courses';
+  const summary = document.createElement('summary');
+  summary.textContent = '其他课程 ' + collapsed.length + ' 门';
+  details.append(summary);
+  const smallWrap = document.createElement('div');
+  smallWrap.className = 'mini-courses';
+  for (const grade of collapsed) {
+    smallWrap.append(createCourseCard(grade, false));
+  }
+  details.append(smallWrap);
+  els.chart.append(details);
+}
+
+function createCourseCard(grade, featured) {
+  const card = document.createElement('article');
+  card.className = featured ? 'course-card featured' : 'course-card compact-course';
+  const title = document.createElement('h3');
+  title.textContent = grade.subject;
+  const score = document.createElement('strong');
+  score.textContent = roundCourseScore(grade.score);
+  const meta = document.createElement('p');
+  meta.textContent = '原始 ' + roundHundredths(grade.score) + ' · 小成绩 ' + (grade.assignments || []).length + ' 项';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'course-toggle';
+  button.textContent = featured ? '缩小' : '展示';
+  button.addEventListener('click', () => toggleSubject(grade.subject));
+  card.append(title, score, meta, button);
+  return card;
 }
 
 function renderTable() {
