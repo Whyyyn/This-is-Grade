@@ -39,10 +39,20 @@ function roundTenths(value) {
   return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
 }
 
-function roundedAverage(values) {
+function roundCourseScore(value) {
+  return Math.round(Number(value) + Number.EPSILON);
+}
+
+function averageDetails(values) {
   if (values.length !== 4) return null;
-  const prepared = values.map(roundTenths);
-  return Math.round(prepared.reduce((sum, value) => sum + value, 0) / prepared.length);
+  const roundedScores = values.map(roundCourseScore);
+  const rawAverage = values.reduce((sum, value) => sum + Number(value), 0) / values.length;
+  const roundedAverageValue = Math.round(roundedScores.reduce((sum, value) => sum + value, 0) / roundedScores.length);
+  return { rounded: roundedAverageValue, raw: rawAverage, roundedScores };
+}
+
+function roundedAverage(values) {
+  return averageDetails(values)?.rounded ?? null;
 }
 
 function setStatus(text, tone = '') {
@@ -104,7 +114,7 @@ function normalizeAssignments(assignments) {
   return assignments.map((item, index) => ({
     id: String(item.id || index + 1),
     categoryId: String(item.categoryId || 'unknown'),
-    category: String(item.category || item.categoryId || 'Column').trim(),
+    category: normalizeCategory(item.category, item.title),
     title: String(item.title || 'Item ' + (index + 1)).trim(),
     earned: numericOrNull(item.earned),
     possible: numericOrNull(item.possible),
@@ -117,6 +127,27 @@ function normalizeAssignments(assignments) {
 function numericOrNull(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function normalizeCategory(category, title = '') {
+  const text = String(category || '').trim();
+  if (!text || /^column\s*\d+$/i.test(text)) return inferCategoryFromTitle(title) || '未分类';
+  return text;
+}
+
+function inferCategoryFromTitle(title) {
+  const normalized = String(title || '').toLowerCase();
+  const categories = [
+    ['Test', /\b(test|exam|assessment|unit)\b/i],
+    ['Quiz', /\bquiz\b/i],
+    ['Homework', /\b(homework|hw|journal|worksheet|reading assignment|classnote)\b/i],
+    ['Classwork', /\b(class work|classwork|notes|participation|outline|understand)\b/i],
+    ['Project', /\b(project|presentation|video|poster|program|psa)\b/i],
+    ['Writing', /\b(essay|paragraph|poem|writing|composition|reading comprehension)\b/i],
+    ['Lab', /\b(lab|experiment)\b/i]
+  ];
+  const found = categories.find(([, pattern]) => pattern.test(normalized));
+  return found ? found[0] : '';
 }
 
 function render() {
@@ -136,7 +167,7 @@ function renderPicker() {
     button.type = 'button';
     button.className = 'subject-chip';
     button.dataset.active = state.selected.has(grade.subject);
-    button.textContent = `${grade.subject} ${roundTenths(grade.score)}`;
+    button.textContent = `${grade.subject} ${roundCourseScore(grade.score)}`;
     button.addEventListener('click', () => toggleSubject(grade.subject));
     els.subjectPicker.append(button);
   }
@@ -157,18 +188,17 @@ function toggleSubject(subject) {
 
 function renderAverage() {
   const selectedGrades = state.grades.filter((grade) => state.selected.has(grade.subject));
-  els.selectionCount.textContent = `${selectedGrades.length} / 4`;
-  const average = roundedAverage(selectedGrades.map((grade) => grade.score));
-  if (average === null) {
+  els.selectionCount.textContent = selectedGrades.length + ' / 4';
+  const details = averageDetails(selectedGrades.map((grade) => grade.score));
+  if (!details) {
     els.averageValue.textContent = '--';
     els.averageFormula.textContent = selectedGrades.length ? '还需要选择四科' : '选择四科后计算';
     return;
   }
-  const rounded = selectedGrades.map((grade) => `${grade.subject} ${roundTenths(grade.score)}`);
-  els.averageValue.textContent = average;
-  els.averageFormula.textContent = `${rounded.join(' + ')} → ${average}`;
+  const rounded = selectedGrades.map((grade) => grade.subject + ' ' + roundCourseScore(grade.score));
+  els.averageValue.textContent = details.rounded;
+  els.averageFormula.textContent = rounded.join(' + ') + ' -> ' + details.rounded + '; 未四舍五入均分 ' + roundHundredths(details.raw);
 }
-
 
 function renderPredictionControls() {
   if (!els.predictionCourse) return;
@@ -208,15 +238,17 @@ function renderPrediction() {
     els.predictionDelta.textContent = '暂无可预测栏目';
     return;
   }
-  els.predictedCourse.textContent = String(roundTenths(prediction.score));
+  els.predictedCourse.textContent = String(roundCourseScore(prediction.score));
   const selectedGrades = state.grades.filter((item) => state.selected.has(item.subject));
   const oldAverage = roundedAverage(selectedGrades.map((item) => item.score));
   const predictedValues = selectedGrades.map((item) => item.subject === grade.subject ? prediction.score : item.score);
   const newAverage = roundedAverage(predictedValues);
   els.predictedAverage.textContent = newAverage === null ? '--' : String(newAverage);
   const delta = roundHundredths(prediction.score - grade.score);
-  const averageText = oldAverage === null || newAverage === null ? '选四科后显示均分变化' : '均分 ' + oldAverage + ' -> ' + newAverage;
-  els.predictionDelta.textContent = grade.subject + ': ' + roundTenths(grade.score) + ' -> ' + roundTenths(prediction.score) + ' (' + (delta >= 0 ? '+' : '') + delta + '); ' + averageText;
+  const oldDetails = averageDetails(selectedGrades.map((item) => item.score));
+  const newDetails = averageDetails(predictedValues);
+  const averageText = !oldDetails || !newDetails ? '选四科后显示均分变化' : '均分 ' + oldDetails.rounded + ' -> ' + newDetails.rounded + '，未四舍五入 ' + roundHundredths(oldDetails.raw) + ' -> ' + roundHundredths(newDetails.raw);
+  els.predictionDelta.textContent = grade.subject + ': ' + roundCourseScore(grade.score) + ' -> ' + roundCourseScore(prediction.score) + ' (' + (delta >= 0 ? '+' : '') + delta + '); ' + averageText;
 }
 
 function getPredictionGrade() {
@@ -266,7 +298,7 @@ function renderChart() {
     fill.style.width = `${Math.max(2, (grade.score / max) * 100)}%`;
     const score = document.createElement('span');
     score.className = 'bar-score';
-    score.textContent = roundTenths(grade.score);
+    score.textContent = roundCourseScore(grade.score);
     track.append(fill, score);
     row.append(label, track);
     els.chart.append(row);
@@ -279,7 +311,7 @@ function renderTable() {
     const row = document.createElement('tr');
     appendCell(row, grade.subject);
     appendCell(row, roundHundredths(grade.score));
-    appendCell(row, roundTenths(grade.score));
+    appendCell(row, roundCourseScore(grade.score));
     appendCell(row, (grade.assignments || []).length + ' 项');
     const detailRow = document.createElement('tr');
     detailRow.className = 'detail-row';

@@ -195,7 +195,7 @@ function parseAssignmentItems(text) {
     return {
       id: match[1],
       categoryId,
-      category: titleInfo.category || 'Column ' + categoryId,
+      category: titleInfo.category || '未分类',
       title: titleInfo.title || 'Item ' + (index + 1),
       earned: Number(match[4]),
       possible: titleInfo.possible,
@@ -217,12 +217,12 @@ function parseAssignmentTitle(text) {
 function inferCategory(title) {
   const normalized = title.toLowerCase();
   const categories = [
-    ['Test', /\b(test|exam|assessment)\b/i],
+    ['Test', /\b(test|exam|assessment|unit)\b/i],
     ['Quiz', /\bquiz\b/i],
-    ['Homework', /\b(homework|hw|journal|worksheet|reading assignment)\b/i],
-    ['Classwork', /\b(class work|classwork|notes|participation)\b/i],
-    ['Project', /\b(project|presentation|video|poster|program)\b/i],
-    ['Writing', /\b(essay|paragraph|poem|writing|composition)\b/i],
+    ['Homework', /\b(homework|hw|journal|worksheet|reading assignment|classnote)\b/i],
+    ['Classwork', /\b(class work|classwork|notes|participation|outline|understand)\b/i],
+    ['Project', /\b(project|presentation|video|poster|program|psa)\b/i],
+    ['Writing', /\b(essay|paragraph|poem|writing|composition|reading comprehension)\b/i],
     ['Lab', /\b(lab|experiment)\b/i]
   ];
   const found = categories.find(([, pattern]) => pattern.test(normalized));
