@@ -658,3 +658,39 @@ tbody tr:nth-child(4n + 1) td {
     min-width: 96px;
   }
 }
+
+
+.layout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.layout-actions .ghost {
+  margin-top: 0;
+}
+
+.layout-help {
+  flex: 1 1 220px;
+  min-height: 34px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 7px 10px;
+  box-shadow: 3px 3px 0 rgba(16, 18, 26, 0.18);
+}
+
+.layout-help summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.layout-help p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}

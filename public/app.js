@@ -27,6 +27,7 @@ const els = {
   refreshButton: document.querySelector('#refreshButton'),
   sampleButton: document.querySelector('#sampleButton'),
   exportButton: document.querySelector('#exportButton'),
+  copyLayoutButton: document.querySelector('#copyLayoutButton'),
   predictionCourse: document.querySelector('#predictionCourse'),
   predictionCategory: document.querySelector('#predictionCategory'),
   predictionScore: document.querySelector('#predictionScore'),
@@ -155,6 +156,10 @@ function inferCategoryFromTitle(title) {
 }
 
 function loadPinnedSubjects() {
+  const fromUrl = new URLSearchParams(window.location.search).get('show');
+  if (fromUrl) {
+    return fromUrl.split('|').map(decodeURIComponent).filter(Boolean).slice(0, 4);
+  }
   try {
     const value = JSON.parse(localStorage.getItem('pinned-subjects') || '[]');
     return Array.isArray(value) ? value : [];
@@ -164,7 +169,29 @@ function loadPinnedSubjects() {
 }
 
 function savePinnedSubjects() {
-  localStorage.setItem('pinned-subjects', JSON.stringify([...state.selected]));
+  const subjects = [...state.selected].slice(0, 4);
+  try {
+    localStorage.setItem('pinned-subjects', JSON.stringify(subjects));
+  } catch {
+    // Safari may block localStorage in stricter privacy modes.
+  }
+  const next = new URL(window.location.href);
+  if (subjects.length) {
+    next.searchParams.set('show', subjects.map(encodeURIComponent).join('|'));
+  } else {
+    next.searchParams.delete('show');
+  }
+  window.history.replaceState({}, '', next);
+}
+
+function copyLayoutLink() {
+  savePinnedSubjects();
+  const link = window.location.href;
+  navigator.clipboard?.writeText(link).then(() => {
+    setStatus('布局链接已复制', 'ok');
+  }).catch(() => {
+    window.prompt('复制这个链接', link);
+  });
 }
 
 function render() {
@@ -458,6 +485,7 @@ els.predictionCategory?.addEventListener('change', () => {
   renderPrediction();
 });
 els.predictionScore?.addEventListener('input', renderPrediction);
+els.copyLayoutButton?.addEventListener('click', copyLayoutLink);
 els.refreshButton.addEventListener('click', () => loadGrades().catch((error) => setStatus(error.message, 'bad')));
 els.sampleButton.addEventListener('click', () => {
   updateGrades(fallbackGrades);
