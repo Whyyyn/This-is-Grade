@@ -2,6 +2,13 @@ const DEFAULT_URL = 'https://harts.systems/webtess/parent.jsp';
 const LOGIN_URL = 'https://harts.systems/webtess/login';
 const DETAIL_API_URL = 'https://harts.systems/webtess/gradebook';
 const USER_AGENT = 'Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15';
+const BASE_HEADERS = {
+  'User-Agent': USER_AGENT,
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache'
+};
 
 export async function scrapeGrades({ email, password, url = DEFAULT_URL }) {
   if (!email || !password) throw new Error('Missing WebTESS email or password.');
@@ -14,22 +21,35 @@ export async function scrapeGrades({ email, password, url = DEFAULT_URL }) {
     savebutton: 'Click to sign in'
   });
 
-  await session.request(LOGIN_URL, {
-    method: 'POST',
-    body: loginBody,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': USER_AGENT
-    }
-  });
+  let parentHtml = '';
+  let courses = [];
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await session.request(LOGIN_URL, {
+      method: 'POST',
+      body: loginBody,
+      headers: {
+        ...BASE_HEADERS,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Origin': 'https://harts.systems',
+        'Referer': 'https://harts.systems/webtess/parent.jsp'
+      }
+    });
 
-  const parentResponse = await session.request(url || DEFAULT_URL, {
-    headers: { 'User-Agent': USER_AGENT }
-  });
-  const parentHtml = await parentResponse.text();
-  const courses = extractGradebookButtons(parentHtml);
+    const parentResponse = await session.request(withCacheBust(url || DEFAULT_URL, attempt), {
+      headers: {
+        ...BASE_HEADERS,
+        'Referer': LOGIN_URL
+      }
+    });
+    parentHtml = await parentResponse.text();
+    courses = extractGradebookButtons(parentHtml);
+    if (courses.length) break;
+    await sleep(250 * attempt);
+  }
+
   if (!courses.length) {
-    throw new Error('Logged in, but no gradebook courses were found. Check the WebTESS account or page structure.');
+    const pageHint = compactSnippet(parentHtml);
+    throw new Error('Logged in, but no gradebook courses were found. WebTESS may have returned a temporary login/session page. Try again in a few seconds. Page starts with: ' + pageHint);
   }
 
   const results = await Promise.all(courses.map((course) => fetchCourseGrade(session, course)));
@@ -66,6 +86,21 @@ function createCookieSession() {
       return response;
     }
   };
+}
+
+
+function withCacheBust(input, attempt) {
+  const next = new URL(input);
+  next.searchParams.set('_', String(Date.now()) + '-' + attempt);
+  return next.href;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function compactSnippet(text) {
+  return cleanHtml(text).slice(0, 180) || String(text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
 }
 
 function storeCookies(headers, cookies) {
@@ -115,7 +150,7 @@ async function fetchCourseGrade(session, course) {
   });
   const response = await session.request(DETAIL_API_URL + '?' + params, {
     method: 'POST',
-    headers: { 'User-Agent': USER_AGENT }
+    headers: { ...BASE_HEADERS, 'Referer': DEFAULT_URL }
   });
   const text = await response.text();
   const parsed = parseGradebookSummary(text);
