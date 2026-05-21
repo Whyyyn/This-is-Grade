@@ -335,6 +335,24 @@ button:hover {
   line-height: 1.45;
 }
 
+.inline-empty {
+  min-height: 0;
+  margin: 0;
+}
+
+.empty-state {
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+  border: 2px dashed var(--line);
+  border-radius: 8px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-weight: 850;
+  text-align: center;
+}
+
 .subject-picker {
   display: flex;
   flex-wrap: wrap;

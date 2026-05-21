@@ -1,15 +1,8 @@
 const state = {
   grades: [],
-  selected: new Set(loadPinnedSubjects())
+  selected: new Set(loadPinnedSubjects()),
+  urlPinned: loadUrlPinnedSubjects()
 };
-
-const fallbackGrades = [
-  { subject: 'English', score: 86.4, raw: 'English 86.4' },
-  { subject: 'Mathematics', score: 91.6, raw: 'Mathematics 91.6' },
-  { subject: 'Chemistry', score: 78.8, raw: 'Chemistry 78.8' },
-  { subject: 'Physics', score: 84.2, raw: 'Physics 84.2' },
-  { subject: 'Biology', score: 88.9, raw: 'Biology 88.9' }
-];
 
 const els = {
   form: document.querySelector('#scrapeForm'),
@@ -25,7 +18,6 @@ const els = {
   gradeCount: document.querySelector('#gradeCount'),
   gradeRows: document.querySelector('#gradeRows'),
   refreshButton: document.querySelector('#refreshButton'),
-  sampleButton: document.querySelector('#sampleButton'),
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   predictionCourse: document.querySelector('#predictionCourse'),
@@ -87,15 +79,6 @@ async function storeCredential() {
   }
 }
 
-async function loadGrades(source = '/api/grades') {
-  setStatus('载入中');
-  const response = await fetch(source);
-  if (!response.ok) throw new Error('成绩载入失败');
-  const grades = await response.json();
-  updateGrades(grades);
-  setStatus('已载入', 'ok');
-}
-
 function updateGrades(grades) {
   state.grades = grades
     .map((grade) => ({
@@ -106,12 +89,33 @@ function updateGrades(grades) {
     }))
     .filter((grade) => grade.subject && Number.isFinite(grade.score))
     .sort((a, b) => b.score - a.score);
-  state.selected = new Set([...state.selected].filter((subject) => state.grades.some((grade) => grade.subject === subject)));
+  state.urlPinned = loadUrlPinnedSubjects();
+  const preferredSubjects = state.urlPinned.length ? state.urlPinned : [...state.selected];
+  state.selected = new Set(resolvePinnedSubjects(preferredSubjects, state.grades).slice(0, 4));
   if (!state.selected.size) {
     state.selected = new Set(state.grades.slice(0, 4).map((grade) => grade.subject));
-    savePinnedSubjects();
+    if (!state.urlPinned.length) savePinnedSubjects();
   }
   render();
+}
+
+function resolvePinnedSubjects(subjects, grades) {
+  const exact = new Map(grades.map((grade) => [grade.subject, grade.subject]));
+  const normalized = new Map(grades.map((grade) => [normalizeSubjectKey(grade.subject), grade.subject]));
+  const resolved = [];
+  for (const subject of subjects) {
+    const match = exact.get(subject) || normalized.get(normalizeSubjectKey(subject));
+    if (match && !resolved.includes(match)) resolved.push(match);
+  }
+  return resolved;
+}
+
+function normalizeSubjectKey(subject) {
+  return String(subject || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/&amp;/g, '&')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, '');
 }
 
 
@@ -155,11 +159,16 @@ function inferCategoryFromTitle(title) {
   return found ? found[0] : '';
 }
 
-function loadPinnedSubjects() {
+function loadUrlPinnedSubjects() {
   const fromUrl = new URLSearchParams(window.location.search).get('show');
-  if (fromUrl) {
-    return fromUrl.split('|').map(decodeURIComponent).filter(Boolean).slice(0, 4);
-  }
+  if (!fromUrl) return [];
+  const decoded = decodeSubjectList(fromUrl);
+  return decoded.slice(0, 4);
+}
+
+function loadPinnedSubjects() {
+  const fromUrl = loadUrlPinnedSubjects();
+  if (fromUrl.length) return fromUrl;
   try {
     const value = JSON.parse(localStorage.getItem('pinned-subjects') || '[]');
     return Array.isArray(value) ? value : [];
@@ -168,8 +177,28 @@ function loadPinnedSubjects() {
   }
 }
 
+function encodeSubjectList(subjects) {
+  return btoa(unescape(encodeURIComponent(JSON.stringify(subjects))));
+}
+
+function decodeSubjectList(value) {
+  try {
+    const json = decodeURIComponent(escape(atob(value)));
+    const parsed = JSON.parse(json);
+    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+  } catch {
+    try {
+      return value.split('|').map(decodeURIComponent).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 function savePinnedSubjects() {
   const subjects = [...state.selected].slice(0, 4);
+  state.urlPinned = subjects;
   try {
     localStorage.setItem('pinned-subjects', JSON.stringify(subjects));
   } catch {
@@ -177,7 +206,7 @@ function savePinnedSubjects() {
   }
   const next = new URL(window.location.href);
   if (subjects.length) {
-    next.searchParams.set('show', subjects.map(encodeURIComponent).join('|'));
+    next.searchParams.set('show', encodeSubjectList(subjects));
   } else {
     next.searchParams.delete('show');
   }
@@ -206,6 +235,13 @@ function render() {
 
 function renderPicker() {
   els.subjectPicker.innerHTML = '';
+  if (!state.grades.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted inline-empty';
+    empty.textContent = '抓取成绩后可以选择要放大的四门课。';
+    els.subjectPicker.append(empty);
+    return;
+  }
   for (const grade of state.grades) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -329,6 +365,13 @@ function roundHundredths(value) {
 
 function renderChart() {
   els.chart.innerHTML = '';
+  if (!state.grades.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = '还没有成绩。输入 WebTESS 邮箱和密码后按回车或点击抓取。';
+    els.chart.append(empty);
+    return;
+  }
   const featured = state.grades.filter((grade) => state.selected.has(grade.subject));
   const collapsed = state.grades.filter((grade) => !state.selected.has(grade.subject));
 
@@ -486,10 +529,12 @@ els.predictionCategory?.addEventListener('change', () => {
 });
 els.predictionScore?.addEventListener('input', renderPrediction);
 els.copyLayoutButton?.addEventListener('click', copyLayoutLink);
-els.refreshButton.addEventListener('click', () => loadGrades().catch((error) => setStatus(error.message, 'bad')));
-els.sampleButton.addEventListener('click', () => {
-  updateGrades(fallbackGrades);
-  setStatus('示例已载入', 'ok');
+els.refreshButton.addEventListener('click', () => {
+  if (els.email.value.trim() && els.password.value) {
+    els.form.requestSubmit();
+  } else {
+    setStatus('请输入邮箱和密码后抓取', 'bad');
+  }
 });
 els.exportButton.addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state.grades, null, 2)], { type: 'application/json' });
@@ -503,7 +548,4 @@ els.exportButton.addEventListener('click', () => {
 
 loadSavedCredential();
 
-loadGrades().catch(() => {
-  updateGrades(fallbackGrades);
-  setStatus('示例已载入', 'ok');
-});
+render();

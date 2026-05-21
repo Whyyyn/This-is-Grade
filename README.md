@@ -26,7 +26,7 @@ Root directory: /
 
 5. Deploy.
 
-Cloudflare will detect the `functions/` folder and publish `/api/scrape` and `/api/grades` as Pages Functions.
+Cloudflare will detect the `functions/` folder and publish `/api/scrape` as a Pages Function.
 
 ## Local Dev
 
