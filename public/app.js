@@ -50,6 +50,32 @@ function setStatus(text, tone = '') {
   els.status.dataset.tone = tone;
 }
 
+async function loadSavedCredential() {
+  const rememberedEmail = localStorage.getItem('webtess-email');
+  if (rememberedEmail && !els.email.value) els.email.value = rememberedEmail;
+  if (!('credentials' in navigator) || !window.PasswordCredential) return;
+  try {
+    const credential = await navigator.credentials.get({ password: true, mediation: 'optional' });
+    if (credential?.id && !els.email.value) els.email.value = credential.id;
+    if (credential?.password && !els.password.value) els.password.value = credential.password;
+  } catch {
+    // Some browsers intentionally block programmatic password access.
+  }
+}
+
+async function storeCredential() {
+  const email = els.email.value.trim();
+  const password = els.password.value;
+  if (email) localStorage.setItem('webtess-email', email);
+  if (!email || !password || !('credentials' in navigator) || !window.PasswordCredential) return;
+  try {
+    const credential = new PasswordCredential({ id: email, password, name: email });
+    await navigator.credentials.store(credential);
+  } catch {
+    // Browser password managers may decline to save credentials for security reasons.
+  }
+}
+
 async function loadGrades(source = '/api/grades') {
   setStatus('载入中');
   const response = await fetch(source);
@@ -344,6 +370,7 @@ els.form.addEventListener('submit', async (event) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '抓取失败');
     updateGrades(data);
+    await storeCredential();
     setStatus('抓取完成', 'ok');
   } catch (error) {
     setStatus(error.message, 'bad');
@@ -374,6 +401,8 @@ els.exportButton.addEventListener('click', () => {
   anchor.click();
   URL.revokeObjectURL(url);
 });
+
+loadSavedCredential();
 
 loadGrades().catch(() => {
   updateGrades(fallbackGrades);
