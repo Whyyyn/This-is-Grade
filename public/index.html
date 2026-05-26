@@ -3,17 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>WebTESS 成绩 Dashboard</title>
+    <title>This is Grade</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main class="shell">
       <section class="topbar">
         <div>
-          <p class="eyebrow">WebTESS</p>
-          <h1>成绩 Dashboard</h1>
+          <h1>This is Grade<span>.pages.dev</span></h1>
         </div>
-        <button id="refreshButton" class="icon-button" title="重新载入成绩" aria-label="重新载入成绩">
+        <button id="refreshButton" class="icon-button" title="重新抓取成绩" aria-label="重新抓取成绩">
           <span>↻</span>
         </button>
       </section>
@@ -21,19 +20,19 @@
       <section class="workspace">
         <form id="scrapeForm" class="panel login-panel" method="post" autocomplete="on" action="/api/scrape">
           <div class="panel-head">
-            <h2>抓取成绩</h2>
+            <h2>WebTESS</h2>
             <span id="status" class="status">待连接</span>
           </div>
           <label>
-            <span>邮箱</span>
+            <span>enter account</span>
             <input id="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="name@example.com" />
           </label>
           <label>
-            <span>密码</span>
-            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="本地提交，不写入代码" />
+            <span>enter password</span>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="local only" />
           </label>
           <label>
-            <span>网址</span>
+            <span>website</span>
             <input id="url" name="webtess-url" type="url" autocomplete="url" value="https://harts.systems/webtess/parent.jsp" />
           </label>
           <button class="primary" type="submit">抓取并更新</button>
@@ -56,14 +55,27 @@
           </div>
         </section>
 
-        <section class="panel chart-panel">
+        <section class="panel table-panel">
           <div class="panel-head">
-            <h2>重点课程</h2>
-            <span id="gradeCount" class="status">0 科</span>
+            <h2>显示科目明细</h2>
+            <button id="exportButton" class="ghost compact" type="button">导出 JSON</button>
           </div>
-          <div id="chart" class="chart" aria-label="重点课程卡片"></div>
+          <div class="table-wrap details-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>科目</th>
+                  <th>栏目</th>
+                  <th>作业</th>
+                  <th>得分</th>
+                  <th>百分比</th>
+                  <th>权重</th>
+                </tr>
+              </thead>
+              <tbody id="gradeRows"></tbody>
+            </table>
+          </div>
         </section>
-
 
         <section class="panel prediction-panel">
           <div class="panel-head">
@@ -95,26 +107,6 @@
             </div>
           </div>
           <p id="predictionDelta" class="muted">等待成绩明细</p>
-        </section>
-
-        <section class="panel table-panel">
-          <div class="panel-head">
-            <h2>明细</h2>
-            <button id="exportButton" class="ghost compact" type="button">导出 JSON</button>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>科目</th>
-                  <th>原始成绩</th>
-                  <th>整数四舍五入</th>
-                  <th>小成绩</th>
-                </tr>
-              </thead>
-              <tbody id="gradeRows"></tbody>
-            </table>
-          </div>
         </section>
       </section>
     </main>

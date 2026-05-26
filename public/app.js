@@ -14,8 +14,6 @@ const els = {
   selectionCount: document.querySelector('#selectionCount'),
   averageValue: document.querySelector('#averageValue'),
   averageFormula: document.querySelector('#averageFormula'),
-  chart: document.querySelector('#chart'),
-  gradeCount: document.querySelector('#gradeCount'),
   gradeRows: document.querySelector('#gradeRows'),
   refreshButton: document.querySelector('#refreshButton'),
   exportButton: document.querySelector('#exportButton'),
@@ -224,12 +222,10 @@ function copyLayoutLink() {
 }
 
 function render() {
-  els.gradeCount.textContent = `${state.selected.size || 0} / ${state.grades.length} 展示`;
   renderPicker();
   renderAverage();
   renderPredictionControls();
   renderPrediction();
-  renderChart();
   renderTable();
 }
 
@@ -363,77 +359,49 @@ function roundHundredths(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
-function renderChart() {
-  els.chart.innerHTML = '';
-  if (!state.grades.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.textContent = '还没有成绩。输入 WebTESS 邮箱和密码后按回车或点击抓取。';
-    els.chart.append(empty);
-    return;
-  }
-  const featured = state.grades.filter((grade) => state.selected.has(grade.subject));
-  const collapsed = state.grades.filter((grade) => !state.selected.has(grade.subject));
-
-  const featuredWrap = document.createElement('div');
-  featuredWrap.className = 'featured-courses';
-  for (const grade of featured) {
-    featuredWrap.append(createCourseCard(grade, true));
-  }
-  els.chart.append(featuredWrap);
-
-  const details = document.createElement('details');
-  details.className = 'collapsed-courses';
-  const summary = document.createElement('summary');
-  summary.textContent = '其他课程 ' + collapsed.length + ' 门';
-  details.append(summary);
-  const smallWrap = document.createElement('div');
-  smallWrap.className = 'mini-courses';
-  for (const grade of collapsed) {
-    smallWrap.append(createCourseCard(grade, false));
-  }
-  details.append(smallWrap);
-  els.chart.append(details);
-}
-
-function createCourseCard(grade, featured) {
-  const card = document.createElement('article');
-  card.className = featured ? 'course-card featured' : 'course-card compact-course';
-  const title = document.createElement('h3');
-  title.textContent = grade.subject;
-  const score = document.createElement('strong');
-  score.textContent = roundCourseScore(grade.score);
-  const meta = document.createElement('p');
-  meta.textContent = '原始 ' + roundHundredths(grade.score) + ' · 小成绩 ' + (grade.assignments || []).length + ' 项';
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'course-toggle';
-  button.textContent = featured ? '缩小' : '展示';
-  button.addEventListener('click', () => toggleSubject(grade.subject));
-  card.append(title, score, meta, button);
-  return card;
-}
-
 function renderTable() {
   els.gradeRows.innerHTML = '';
-  for (const grade of state.grades) {
+  const selectedGrades = state.grades.filter((grade) => state.selected.has(grade.subject));
+  if (!selectedGrades.length) {
     const row = document.createElement('tr');
-    appendCell(row, grade.subject);
-    appendCell(row, roundHundredths(grade.score));
-    appendCell(row, roundCourseScore(grade.score));
-    appendCell(row, (grade.assignments || []).length + ' 项');
-    const detailRow = document.createElement('tr');
-    detailRow.className = 'detail-row';
-    const detailCell = document.createElement('td');
-    detailCell.colSpan = 4;
-    detailCell.append(renderAssignmentDetails(grade));
-    detailRow.append(detailCell);
-    els.gradeRows.append(row, detailRow);
+    const cell = document.createElement('td');
+    cell.colSpan = 6;
+    cell.className = 'empty-detail';
+    cell.textContent = state.grades.length ? '选择展示的四门课后，这里会显示对应小成绩。' : '抓取成绩后显示小成绩明细。';
+    row.append(cell);
+    els.gradeRows.append(row);
+    return;
+  }
+
+  for (const grade of selectedGrades) {
+    if (!grade.assignments.length) {
+      const row = document.createElement('tr');
+      appendCell(row, grade.subject + ' · ' + roundCourseScore(grade.score), 'subject-cell');
+      appendCell(row, '总分');
+      appendCell(row, '暂无小成绩明细');
+      appendCell(row, '--');
+      appendCell(row, roundHundredths(grade.score) + '%');
+      appendCell(row, '--');
+      els.gradeRows.append(row);
+      continue;
+    }
+
+    for (const [index, item] of grade.assignments.entries()) {
+      const row = document.createElement('tr');
+      appendCell(row, index === 0 ? grade.subject + ' · ' + roundCourseScore(grade.score) : '', 'subject-cell');
+      appendCell(row, item.category);
+      appendCell(row, item.title);
+      appendCell(row, formatPoints(item));
+      appendCell(row, roundHundredths(item.scorePercent) + '%');
+      appendCell(row, roundHundredths(item.itemWeight) + '%');
+      els.gradeRows.append(row);
+    }
   }
 }
 
-function appendCell(row, value) {
+function appendCell(row, value, className = '') {
   const cell = document.createElement('td');
+  if (className) cell.className = className;
   cell.textContent = value;
   row.append(cell);
 }
