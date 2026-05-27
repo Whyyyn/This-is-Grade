@@ -1,7 +1,8 @@
 const state = {
   grades: [],
   selected: new Set(loadPinnedSubjects()),
-  urlPinned: loadUrlPinnedSubjects()
+  urlPinned: loadUrlPinnedSubjects(),
+  detailSubject: ''
 };
 
 const els = {
@@ -14,7 +15,9 @@ const els = {
   selectionCount: document.querySelector('#selectionCount'),
   averageValue: document.querySelector('#averageValue'),
   averageFormula: document.querySelector('#averageFormula'),
+  detailTabs: document.querySelector('#detailTabs'),
   gradeRows: document.querySelector('#gradeRows'),
+  assignmentChart: document.querySelector('#assignmentChart'),
   refreshButton: document.querySelector('#refreshButton'),
   themeToggleButton: document.querySelector('#themeToggleButton'),
   exportButton: document.querySelector('#exportButton'),
@@ -261,11 +264,14 @@ function copyLayoutLink() {
 }
 
 function render() {
+  ensureDetailSubject();
   renderPicker();
   renderAverage();
+  renderDetailTabs();
   renderPredictionControls();
   renderPrediction();
   renderTable();
+  renderAssignmentChart();
 }
 
 function renderPicker() {
@@ -299,11 +305,30 @@ function toggleSubject(subject) {
     state.selected.add(subject);
   }
   savePinnedSubjects();
+  if (!state.selected.has(state.detailSubject)) state.detailSubject = '';
   render();
 }
 
+function getSelectedGrades() {
+  return state.grades.filter((grade) => state.selected.has(grade.subject));
+}
+
+function ensureDetailSubject() {
+  const selectedGrades = getSelectedGrades();
+  if (selectedGrades.some((grade) => grade.subject === state.detailSubject)) return;
+  state.detailSubject = selectedGrades[0]?.subject || '';
+}
+
+function setDetailSubject(subject) {
+  if (state.detailSubject === subject) return;
+  state.detailSubject = subject;
+  renderDetailTabs();
+  renderTable();
+  renderAssignmentChart();
+}
+
 function renderAverage() {
-  const selectedGrades = state.grades.filter((grade) => state.selected.has(grade.subject));
+  const selectedGrades = getSelectedGrades();
   els.selectionCount.textContent = selectedGrades.length + ' / 4';
   const details = averageDetails(selectedGrades.map((grade) => grade.score));
   if (!details) {
@@ -314,6 +339,31 @@ function renderAverage() {
   const rounded = selectedGrades.map((grade) => grade.subject + ' ' + roundCourseScore(grade.score));
   els.averageValue.textContent = details.rounded;
   els.averageFormula.textContent = rounded.join(' + ') + ' -> ' + details.rounded + '; 未四舍五入均分 ' + roundHundredths(details.raw);
+}
+
+function renderDetailTabs() {
+  if (!els.detailTabs) return;
+  els.detailTabs.innerHTML = '';
+  const selectedGrades = getSelectedGrades();
+  if (!selectedGrades.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted inline-empty';
+    empty.textContent = '左侧选择展示的科目后，这里会出现四个切换标签。';
+    els.detailTabs.append(empty);
+    return;
+  }
+  for (const grade of selectedGrades) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'detail-tab';
+    button.dataset.active = grade.subject === state.detailSubject;
+    button.textContent = grade.subject + ' · ' + roundCourseScore(grade.score);
+    button.setAttribute('aria-pressed', grade.subject === state.detailSubject ? 'true' : 'false');
+    button.addEventListener('mouseenter', () => setDetailSubject(grade.subject));
+    button.addEventListener('focus', () => setDetailSubject(grade.subject));
+    button.addEventListener('click', () => setDetailSubject(grade.subject));
+    els.detailTabs.append(button);
+  }
 }
 
 function renderPredictionControls() {
@@ -355,7 +405,7 @@ function renderPrediction() {
     return;
   }
   els.predictedCourse.textContent = String(roundCourseScore(prediction.score));
-  const selectedGrades = state.grades.filter((item) => state.selected.has(item.subject));
+  const selectedGrades = getSelectedGrades();
   const oldAverage = roundedAverage(selectedGrades.map((item) => item.score));
   const predictedValues = selectedGrades.map((item) => item.subject === grade.subject ? prediction.score : item.score);
   const newAverage = roundedAverage(predictedValues);
@@ -400,8 +450,9 @@ function roundHundredths(value) {
 
 function renderTable() {
   els.gradeRows.innerHTML = '';
-  const selectedGrades = state.grades.filter((grade) => state.selected.has(grade.subject));
-  if (!selectedGrades.length) {
+  const selectedGrades = getSelectedGrades();
+  const grade = selectedGrades.find((item) => item.subject === state.detailSubject);
+  if (!grade) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
     cell.colSpan = 6;
@@ -412,29 +463,37 @@ function renderTable() {
     return;
   }
 
-  for (const grade of selectedGrades) {
-    if (!grade.assignments.length) {
-      const row = document.createElement('tr');
-      appendCell(row, grade.subject + ' · ' + roundCourseScore(grade.score), 'subject-cell');
-      appendCell(row, '总分');
-      appendCell(row, '暂无小成绩明细');
-      appendCell(row, '--');
-      appendCell(row, roundHundredths(grade.score) + '%');
-      appendCell(row, '--');
-      els.gradeRows.append(row);
-      continue;
-    }
+  const totalRow = document.createElement('tr');
+  totalRow.className = 'total-row';
+  appendCell(totalRow, grade.subject, 'subject-cell');
+  appendCell(totalRow, '总分');
+  appendCell(totalRow, '当前课程总成绩');
+  appendCell(totalRow, String(roundCourseScore(grade.score)), 'total-score');
+  appendCell(totalRow, roundHundredths(grade.score) + '%');
+  appendCell(totalRow, '100%');
+  els.gradeRows.append(totalRow);
 
-    for (const [index, item] of grade.assignments.entries()) {
-      const row = document.createElement('tr');
-      appendCell(row, index === 0 ? grade.subject + ' · ' + roundCourseScore(grade.score) : '', 'subject-cell');
-      appendCell(row, item.category);
-      appendCell(row, item.title);
-      appendCell(row, formatPoints(item));
-      appendCell(row, roundHundredths(item.scorePercent) + '%');
-      appendCell(row, roundHundredths(item.itemWeight) + '%');
-      els.gradeRows.append(row);
-    }
+  if (!grade.assignments.length) {
+    const row = document.createElement('tr');
+    appendCell(row, '');
+    appendCell(row, '小成绩');
+    appendCell(row, '暂无小成绩明细');
+    appendCell(row, '--');
+    appendCell(row, '--');
+    appendCell(row, '--');
+    els.gradeRows.append(row);
+    return;
+  }
+
+  for (const item of grade.assignments) {
+    const row = document.createElement('tr');
+    appendCell(row, '');
+    appendCell(row, item.category);
+    appendCell(row, item.title);
+    appendCell(row, formatPoints(item));
+    appendCell(row, roundHundredths(item.scorePercent) + '%');
+    appendCell(row, roundHundredths(item.itemWeight) + '%');
+    els.gradeRows.append(row);
   }
 }
 
@@ -483,6 +542,177 @@ function formatPoints(item) {
   if (item.earned !== null && item.possible !== null) return roundHundredths(item.earned) + ' / ' + roundHundredths(item.possible);
   if (item.earned !== null) return String(roundHundredths(item.earned));
   return '--';
+}
+
+function renderAssignmentChart() {
+  if (!els.assignmentChart) return;
+  els.assignmentChart.innerHTML = '';
+  const grade = getSelectedGrades().find((item) => item.subject === state.detailSubject);
+  if (!grade) {
+    els.assignmentChart.append(createChartEmpty('选择展示科目后显示作业权重图。'));
+    return;
+  }
+  if (!grade.assignments.length) {
+    els.assignmentChart.append(createChartEmpty('这个科目没有可绘制的小成绩。'));
+    return;
+  }
+
+  const items = buildChartItems(grade.assignments);
+  const chart = document.createElement('div');
+  chart.className = 'donut-layout';
+  const detail = document.createElement('p');
+  detail.className = 'chart-detail muted';
+  const showItemDetail = (item) => {
+    detail.textContent = item.title + ' | weight ' + roundHundredths(item.displayWeight) + '% | score ' + roundHundredths(item.scorePercent) + '% | ' + formatPoints(item.raw);
+  };
+  chart.append(createDonutSvg(items, showItemDetail));
+
+  const legend = document.createElement('div');
+  legend.className = 'donut-legend';
+  for (const item of items) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'legend-item';
+    row.title = item.title + ' · 占比 ' + roundHundredths(item.displayWeight) + '% · 实得 ' + roundHundredths(item.scorePercent) + '%';
+    row.innerHTML =
+      '<span class="legend-swatch" style="--swatch:' + item.color + '"></span>' +
+      '<span class="legend-text"><strong>' + escapeHtml(item.title) + '</strong><small>' +
+      roundHundredths(item.displayWeight) + '% · ' + roundHundredths(item.scorePercent) + '% · ' + escapeHtml(formatPoints(item.raw)) +
+      '</small></span>';
+    row.addEventListener('mouseenter', () => showItemDetail(item));
+    row.addEventListener('focus', () => showItemDetail(item));
+    row.addEventListener('click', () => showItemDetail(item));
+    legend.append(row);
+  }
+  if (items[0]) showItemDetail(items[0]);
+  chart.append(legend);
+  chart.append(detail);
+  els.assignmentChart.append(chart);
+}
+
+function createChartEmpty(text) {
+  const empty = document.createElement('p');
+  empty.className = 'muted chart-empty';
+  empty.textContent = text;
+  return empty;
+}
+
+function buildChartItems(assignments) {
+  const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
+  const positiveWeights = assignments.map((item) => Math.max(0, Number(item.itemWeight) || 0));
+  const hasWeights = positiveWeights.some((weight) => weight > 0);
+  const weights = hasWeights ? positiveWeights : assignments.map(() => 1);
+  const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+  return assignments.map((item, index) => {
+    const weight = weights[index];
+    return {
+      raw: item,
+      title: item.title,
+      displayWeight: hasWeights ? weight : 100 / assignments.length,
+      share: weight / total,
+      scorePercent: Number(item.scorePercent) || 0,
+      color: colors[index % colors.length],
+      patternId: 'lossPattern' + index
+    };
+  });
+}
+
+function createDonutSvg(items, onActivate) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 240 240');
+  svg.setAttribute('role', 'img');
+  svg.classList.add('donut');
+
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  for (const item of items) {
+    const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    pattern.setAttribute('id', item.patternId);
+    pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+    pattern.setAttribute('width', '8');
+    pattern.setAttribute('height', '8');
+    const base = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    base.setAttribute('width', '8');
+    base.setAttribute('height', '8');
+    base.setAttribute('fill', item.color);
+    base.setAttribute('opacity', '0.28');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.setAttribute('d', 'M-2 8 L8 -2 M2 10 L10 2');
+    line.setAttribute('stroke', item.color);
+    line.setAttribute('stroke-width', '2');
+    pattern.append(base, line);
+    defs.append(pattern);
+  }
+  svg.append(defs);
+
+  let cursor = -90;
+  for (const item of items) {
+    const span = item.share * 360;
+    const earnedSpan = span * clamp(item.scorePercent / 100, 0, 1);
+    const lostSpan = Math.max(0, span - earnedSpan);
+    if (earnedSpan > 0.1) svg.append(createArcPath(120, 120, 98, 58, cursor, cursor + earnedSpan, item.color, item, onActivate));
+    if (lostSpan > 0.1) svg.append(createArcPath(120, 120, 98, 58, cursor + earnedSpan, cursor + span, 'url(#' + item.patternId + ')', item, onActivate));
+    cursor += span;
+  }
+
+  const center = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  center.setAttribute('x', '120');
+  center.setAttribute('y', '116');
+  center.setAttribute('text-anchor', 'middle');
+  center.classList.add('donut-center');
+  center.textContent = '权重';
+  const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  sub.setAttribute('x', '120');
+  sub.setAttribute('y', '138');
+  sub.setAttribute('text-anchor', 'middle');
+  sub.classList.add('donut-sub');
+  sub.textContent = '实得 / 未满';
+  svg.append(center, sub);
+  return svg;
+}
+
+function createArcPath(cx, cy, outerRadius, innerRadius, startAngle, endAngle, fill, item, onActivate) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const safeEndAngle = endAngle - startAngle >= 359.99 ? startAngle + 359.99 : endAngle;
+  path.setAttribute('d', donutSegmentPath(cx, cy, outerRadius, innerRadius, startAngle, safeEndAngle));
+  path.setAttribute('fill', fill);
+  path.setAttribute('tabindex', '0');
+  path.classList.add('donut-segment');
+  const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+  title.textContent = item.title + ' · 占比 ' + roundHundredths(item.displayWeight) + '% · 实得 ' + roundHundredths(item.scorePercent) + '%';
+  path.append(title);
+  if (onActivate) {
+    path.addEventListener('mouseenter', () => onActivate(item));
+    path.addEventListener('focus', () => onActivate(item));
+    path.addEventListener('click', () => onActivate(item));
+  }
+  return path;
+}
+
+function donutSegmentPath(cx, cy, outerRadius, innerRadius, startAngle, endAngle) {
+  const startOuter = polarToCartesian(cx, cy, outerRadius, endAngle);
+  const endOuter = polarToCartesian(cx, cy, outerRadius, startAngle);
+  const startInner = polarToCartesian(cx, cy, innerRadius, startAngle);
+  const endInner = polarToCartesian(cx, cy, innerRadius, endAngle);
+  const largeArc = endAngle - startAngle <= 180 ? '0' : '1';
+  return [
+    'M', startOuter.x, startOuter.y,
+    'A', outerRadius, outerRadius, 0, largeArc, 0, endOuter.x, endOuter.y,
+    'L', startInner.x, startInner.y,
+    'A', innerRadius, innerRadius, 0, largeArc, 1, endInner.x, endInner.y,
+    'Z'
+  ].join(' ');
+}
+
+function polarToCartesian(cx, cy, radius, angleInDegrees) {
+  const angleInRadians = angleInDegrees * Math.PI / 180;
+  return {
+    x: cx + radius * Math.cos(angleInRadians),
+    y: cy + radius * Math.sin(angleInRadians)
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function escapeHtml(value) {
