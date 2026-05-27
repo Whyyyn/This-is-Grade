@@ -16,6 +16,7 @@ const els = {
   averageFormula: document.querySelector('#averageFormula'),
   gradeRows: document.querySelector('#gradeRows'),
   refreshButton: document.querySelector('#refreshButton'),
+  themeToggleButton: document.querySelector('#themeToggleButton'),
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   predictionCourse: document.querySelector('#predictionCourse'),
@@ -25,6 +26,8 @@ const els = {
   predictedAverage: document.querySelector('#predictedAverage'),
   predictionDelta: document.querySelector('#predictionDelta')
 };
+
+applyTheme(loadTheme());
 
 function roundTenths(value) {
   return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
@@ -49,6 +52,42 @@ function roundedAverage(values) {
 function setStatus(text, tone = '') {
   els.status.textContent = text;
   els.status.dataset.tone = tone;
+}
+
+function loadTheme() {
+  const fromUrl = new URLSearchParams(window.location.search).get('theme');
+  if (fromUrl === 'light' || fromUrl === 'dark') return fromUrl;
+  try {
+    const saved = localStorage.getItem('grade-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch {
+    // Ignore storage failures in strict privacy modes.
+  }
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function applyTheme(theme, writeUrl = true) {
+  const nextTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = nextTheme;
+  if (els.themeToggleButton) {
+    els.themeToggleButton.querySelector('span').textContent = nextTheme === 'light' ? '☾' : '☀';
+    els.themeToggleButton.title = nextTheme === 'light' ? '切换到暗色主题' : '切换到亮色主题';
+    els.themeToggleButton.setAttribute('aria-label', els.themeToggleButton.title);
+  }
+  try {
+    localStorage.setItem('grade-theme', nextTheme);
+  } catch {
+    // Ignore storage failures in strict privacy modes.
+  }
+  if (!writeUrl) return;
+  const next = new URL(window.location.href);
+  next.searchParams.set('theme', nextTheme);
+  window.history.replaceState({}, '', next);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  applyTheme(current === 'light' ? 'dark' : 'light');
 }
 
 async function loadSavedCredential() {
@@ -497,6 +536,7 @@ els.predictionCategory?.addEventListener('change', () => {
 });
 els.predictionScore?.addEventListener('input', renderPrediction);
 els.copyLayoutButton?.addEventListener('click', copyLayoutLink);
+els.themeToggleButton?.addEventListener('click', toggleTheme);
 els.refreshButton.addEventListener('click', () => {
   if (els.email.value.trim() && els.password.value) {
     els.form.requestSubmit();

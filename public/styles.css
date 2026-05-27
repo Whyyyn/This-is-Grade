@@ -1,22 +1,19 @@
-@import url("https://fonts.googleapis.com/css2?family=Chathura:wght@300;400;700;800&display=swap");
-
 :root {
   color-scheme: dark;
-  --bg: #2f2f2f;
-  --panel: rgba(49, 49, 49, 0.88);
-  --panel-strong: rgba(38, 38, 38, 0.9);
-  --ink: #f3eee4;
-  --muted: #c9c1b5;
-  --soft: #918b84;
-  --line: rgba(243, 238, 228, 0.24);
-  --line-strong: rgba(243, 238, 228, 0.58);
-  --accent: #eee6d7;
-  --bad: #ff8d8d;
-  --ok: #bcefd5;
+  --bg: #111111;
+  --fg: #f4f2ec;
+  --line: color-mix(in srgb, var(--fg) 28%, transparent);
+  --line-strong: color-mix(in srgb, var(--fg) 62%, transparent);
+  --surface: color-mix(in srgb, var(--fg) 5%, transparent);
+  --surface-strong: color-mix(in srgb, var(--fg) 10%, transparent);
   --title-font: "Century Gothic", "Avenir Next", "Segoe UI", sans-serif;
-  --latin-font: "Chathura", "Century Gothic", sans-serif;
   --ui-font: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
-  --shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f2ec;
+  --fg: #111111;
 }
 
 * {
@@ -31,26 +28,12 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow-x: hidden;
-  color: var(--ink);
+  color: var(--fg);
+  background: var(--bg);
   font-family: var(--ui-font);
   font-size: 15px;
   line-height: 1.45;
   letter-spacing: 0;
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.055) 0 10%, transparent 10% 48%, rgba(0,0,0,0.22) 48% 100%),
-    linear-gradient(26deg, transparent 0 56%, rgba(255,255,255,0.035) 56% 68%, transparent 68%),
-    radial-gradient(circle at 12% 12%, rgba(255,255,255,0.07) 0 1px, transparent 1px) 0 0 / 4px 4px,
-    var(--bg);
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(240deg, transparent 0 62%, rgba(0,0,0,0.24) 62% 100%);
-  clip-path: polygon(0 0, 100% 0, 100% 78%, 68% 100%, 0 84%);
-  opacity: 0.9;
 }
 
 button,
@@ -64,11 +47,9 @@ button {
 }
 
 .shell {
-  position: relative;
-  z-index: 1;
   width: min(1320px, calc(100% - 44px));
   margin: 0 auto;
-  padding: 24px 0 56px;
+  padding: 28px 0 56px;
 }
 
 .topbar {
@@ -76,14 +57,21 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  min-height: 126px;
-  margin-bottom: 12px;
+  min-height: 108px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line-strong);
 }
 
 .topbar > div,
 .panel-head,
 .panel-head h2 {
   min-width: 0;
+}
+
+.top-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 h1,
@@ -93,25 +81,24 @@ p {
 }
 
 h1 {
+  color: var(--fg);
   font-family: var(--title-font);
-  font-size: clamp(48px, 8vw, 124px);
+  font-size: clamp(44px, 7vw, 104px);
   font-weight: 400;
-  line-height: 0.92;
-  color: var(--ink);
+  line-height: 0.96;
 }
 
 h1 span {
   margin-left: 4px;
-  color: var(--muted);
-  font-size: 0.38em;
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  font-size: 0.34em;
 }
 
 h2 {
-  font-family: var(--title-font);
-  color: var(--ink);
-  font-size: 20px;
-  font-weight: 400;
-  line-height: 1.15;
+  color: var(--fg);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
 .workspace {
@@ -121,35 +108,14 @@ h2 {
     "login details"
     "average details"
     "prediction prediction";
-  gap: 18px 28px;
+  gap: 18px 24px;
   align-items: start;
 }
 
 .panel {
-  position: relative;
-  border: 1px solid var(--line);
-  border-radius: 26px;
-  background:
-    linear-gradient(150deg, rgba(255,255,255,0.055), transparent 40%),
-    var(--panel);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
-
-.panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 12% 14%, rgba(255,255,255,0.08) 0 1px, transparent 1px) 0 0 / 5px 5px,
-    linear-gradient(120deg, transparent 0 64%, rgba(255,255,255,0.045) 64% 65%, transparent 65%);
-  opacity: 0.44;
-}
-
-.panel > * {
-  position: relative;
-  z-index: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: var(--surface);
 }
 
 .panel-head {
@@ -166,12 +132,11 @@ h2 {
   align-items: center;
   justify-content: center;
   min-height: 28px;
-  max-width: 210px;
+  max-width: 220px;
   padding: 4px 10px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--muted);
-  background: rgba(255,255,255,0.04);
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  background: transparent;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -179,54 +144,41 @@ h2 {
   text-overflow: ellipsis;
 }
 
-.status[data-tone="ok"] {
-  color: var(--ok);
-  border-color: rgba(188,239,213,0.48);
-}
-
+.status[data-tone="ok"],
 .status[data-tone="bad"] {
-  color: var(--bad);
-  border-color: rgba(255,141,141,0.52);
+  color: var(--fg);
+  border-color: var(--fg);
 }
 
 .login-panel {
   grid-area: login;
-  min-height: 304px;
-  padding: 20px 18px;
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-}
-
-.login-panel::before {
-  display: none;
+  padding: 20px;
 }
 
 label {
   display: grid;
   gap: 8px;
-  margin-bottom: 17px;
-  color: var(--ink);
+  margin-bottom: 16px;
+  color: var(--fg);
 }
 
 label span {
-  font-family: var(--latin-font);
-  color: var(--ink);
-  font-size: clamp(34px, 3.2vw, 48px);
-  font-weight: 300;
-  line-height: 0.62;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 
 input,
 select {
   width: 100%;
   min-height: 42px;
-  border: 0;
-  border-bottom: 1.5px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: 0;
-  padding: 8px 2px 6px;
-  color: var(--ink);
-  background: transparent;
+  padding: 9px 10px;
+  color: var(--fg);
+  background: var(--bg);
   outline: none;
   font-family: var(--ui-font);
   font-size: 15px;
@@ -234,51 +186,48 @@ select {
 }
 
 input::placeholder {
-  color: rgba(243,238,228,0.38);
-}
-
-select {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 9px 12px;
-  background: rgba(255,255,255,0.06);
+  color: color-mix(in srgb, var(--fg) 45%, transparent);
 }
 
 input:focus,
 select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 8px 0 -6px var(--accent);
+  border-color: var(--fg);
 }
 
 button {
   min-height: 38px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
 button:hover {
-  transform: translateY(-1px);
-  border-color: var(--line-strong);
-  background: rgba(255,255,255,0.13);
+  color: var(--bg);
+  background: var(--fg);
+  border-color: var(--fg);
 }
 
 .primary {
   width: 100%;
   min-height: 44px;
   margin-top: 4px;
-  color: #292929;
-  background: var(--accent);
+  color: var(--bg);
+  background: var(--fg);
   font-size: 15px;
   font-weight: 700;
 }
 
+.primary:hover {
+  color: var(--fg);
+  background: transparent;
+}
+
 .ghost,
 .icon-button {
-  color: var(--ink);
-  background: rgba(255,255,255,0.06);
+  color: var(--fg);
+  background: transparent;
 }
 
 .ghost {
@@ -296,32 +245,32 @@ button:hover {
 .icon-button {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  font-size: 26px;
+  width: 42px;
+  height: 42px;
+  font-size: 20px;
   line-height: 1;
 }
 
 .average-panel {
   grid-area: average;
   min-height: 270px;
-  padding: 22px;
+  padding: 20px;
 }
 
 .average-value {
   display: block;
   margin: 10px 0 8px;
-  color: var(--ink);
+  color: var(--fg);
   font-family: var(--title-font);
-  font-size: clamp(72px, 7vw, 118px);
+  font-size: clamp(64px, 6vw, 104px);
   font-weight: 400;
-  line-height: 0.9;
+  line-height: 0.94;
 }
 
 .muted {
   min-height: 28px;
   margin: 8px 0 14px;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -341,14 +290,15 @@ button:hover {
   min-height: 30px;
   max-width: 100%;
   padding: 4px 10px;
-  color: var(--muted);
+  color: var(--fg);
+  border-color: var(--line);
   font-size: 13px;
 }
 
 .subject-chip[data-active="true"] {
-  color: #2d2d2d;
-  border-color: var(--accent);
-  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--fg);
+  background: var(--fg);
 }
 
 .layout-actions {
@@ -367,21 +317,20 @@ button:hover {
   flex: 1 1 220px;
   min-height: 34px;
   border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(255,255,255,0.04);
+  background: transparent;
   padding: 8px 11px;
 }
 
 .layout-help summary {
   cursor: pointer;
-  color: var(--muted);
+  color: var(--fg);
   font-size: 13px;
   font-weight: 600;
 }
 
 .layout-help p {
   margin-top: 8px;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -391,17 +340,15 @@ button:hover {
   min-height: 420px;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 28px;
   padding: 24px;
-  background: rgba(255,255,255,0.04);
-  color: var(--muted);
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
   font-size: 15px;
   text-align: center;
 }
 
 .prediction-panel,
 .table-panel {
-  padding: 22px;
+  padding: 20px;
 }
 
 .prediction-panel {
@@ -420,9 +367,8 @@ button:hover {
 }
 
 .predict-grid label span {
-  font-family: var(--ui-font);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 650;
   line-height: 1.2;
 }
 
@@ -435,22 +381,21 @@ button:hover {
 
 .prediction-results div {
   border: 1px solid var(--line);
-  border-radius: 20px;
   padding: 14px 16px 12px;
-  background: rgba(255,255,255,0.04);
+  background: transparent;
 }
 
 .prediction-results span {
   display: block;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
   font-size: 13px;
   margin-bottom: 4px;
 }
 
 .prediction-results strong {
-  color: var(--ink);
+  color: var(--fg);
   font-family: var(--title-font);
-  font-size: 48px;
+  font-size: 44px;
   font-weight: 400;
   line-height: 0.95;
 }
@@ -463,8 +408,7 @@ button:hover {
   max-height: 650px;
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(255,255,255,0.025);
+  background: var(--bg);
 }
 
 table {
@@ -485,14 +429,14 @@ th {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: #303030;
-  color: var(--muted);
+  color: var(--fg);
+  background: var(--bg);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 td {
-  color: var(--ink);
+  color: var(--fg);
   font-size: 14px;
   line-height: 1.35;
   vertical-align: top;
@@ -500,27 +444,20 @@ td {
 
 .subject-cell {
   max-width: 190px;
-  color: var(--accent);
+  color: var(--fg);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.detail-row td {
-  padding-top: 0;
-  color: var(--muted);
-  background: rgba(255,255,255,0.025);
-}
-
 .course-details {
   border: 1px solid var(--line);
-  border-radius: 16px;
   padding: 10px 12px;
-  background: rgba(255,255,255,0.035);
+  background: transparent;
 }
 
 .course-details summary {
   cursor: pointer;
-  color: var(--ink);
+  color: var(--fg);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -541,7 +478,7 @@ td {
 
 .empty-detail {
   margin-top: 10px;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
   font-size: 13px;
 }
 
@@ -572,7 +509,7 @@ td {
   }
 
   .topbar {
-    min-height: 92px;
+    min-height: 96px;
     gap: 10px;
   }
 
@@ -592,14 +529,13 @@ td {
     gap: 8px;
   }
 
-  .icon-button {
-    flex: 0 0 auto;
-    width: 44px;
-    height: 44px;
+  .top-actions {
+    gap: 6px;
   }
 
-  .panel {
-    border-radius: 22px;
+  .icon-button {
+    width: 40px;
+    height: 40px;
   }
 
   .details-wrap {
