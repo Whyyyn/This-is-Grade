@@ -513,14 +513,18 @@ td {
 
 .donut-segment {
   outline: none;
-  transition: opacity 120ms ease, transform 120ms ease;
+  transition: filter 120ms ease, opacity 120ms ease, stroke-width 120ms ease, transform 120ms ease;
   transform-origin: 120px 120px;
 }
 
 .donut-segment:hover,
-.donut-segment:focus {
-  opacity: 0.78;
-  transform: scale(1.015);
+.donut-segment:focus,
+.donut-segment[data-active="true"] {
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--fg) 48%, transparent));
+  opacity: 1;
+  stroke: var(--bg);
+  stroke-width: 1.4px;
+  transform: scale(1.025);
 }
 
 .donut-center {
@@ -551,9 +555,11 @@ td {
 }
 
 .legend-item:hover,
-.legend-item:focus {
+.legend-item:focus,
+.legend-item[data-active="true"] {
   color: var(--fg);
   background: var(--surface);
+  border-color: var(--fg);
 }
 
 .legend-swatch {

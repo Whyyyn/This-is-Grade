@@ -564,6 +564,9 @@ function renderAssignmentChart() {
   detail.className = 'chart-detail muted';
   const showItemDetail = (item) => {
     detail.textContent = item.title + ' | weight ' + roundHundredths(item.displayWeight) + '% | score ' + roundHundredths(item.scorePercent) + '% | ' + formatPoints(item.raw);
+    for (const node of chart.querySelectorAll('[data-chart-item]')) {
+      node.dataset.active = node.dataset.chartItem === item.id ? 'true' : 'false';
+    }
   };
   chart.append(createDonutSvg(items, showItemDetail));
 
@@ -573,6 +576,8 @@ function renderAssignmentChart() {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'legend-item';
+    row.dataset.chartItem = item.id;
+    row.dataset.active = 'false';
     row.title = item.title + ' · 占比 ' + roundHundredths(item.displayWeight) + '% · 实得 ' + roundHundredths(item.scorePercent) + '%';
     row.innerHTML =
       '<span class="legend-swatch" style="--swatch:' + item.color + '"></span>' +
@@ -584,9 +589,9 @@ function renderAssignmentChart() {
     row.addEventListener('click', () => showItemDetail(item));
     legend.append(row);
   }
-  if (items[0]) showItemDetail(items[0]);
   chart.append(legend);
   chart.append(detail);
+  if (items[0]) showItemDetail(items[0]);
   els.assignmentChart.append(chart);
 }
 
@@ -606,6 +611,7 @@ function buildChartItems(assignments) {
   return assignments.map((item, index) => {
     const weight = weights[index];
     return {
+      id: 'assignment-' + index,
       raw: item,
       title: item.title,
       displayWeight: hasWeights ? weight : 100 / assignments.length,
@@ -676,6 +682,9 @@ function createArcPath(cx, cy, outerRadius, innerRadius, startAngle, endAngle, f
   path.setAttribute('d', donutSegmentPath(cx, cy, outerRadius, innerRadius, startAngle, safeEndAngle));
   path.setAttribute('fill', fill);
   path.setAttribute('tabindex', '0');
+  path.setAttribute('data-chart-item', item.id);
+  path.setAttribute('data-active', 'false');
+  path.setAttribute('aria-label', item.title + ', weight ' + roundHundredths(item.displayWeight) + '%, score ' + roundHundredths(item.scorePercent) + '%');
   path.classList.add('donut-segment');
   const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
   title.textContent = item.title + ' · 占比 ' + roundHundredths(item.displayWeight) + '% · 实得 ' + roundHundredths(item.scorePercent) + '%';
