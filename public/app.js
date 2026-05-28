@@ -246,6 +246,27 @@ function copyLayoutLink() {
   });
 }
 
+async function loadBrowserCredential() {
+  if (!('credentials' in navigator) || !window.PasswordCredential) return;
+  try {
+    const credential = await navigator.credentials.get({ password: true, mediation: 'optional' });
+    if (credential?.id && !els.email.value) els.email.value = credential.id;
+    if (credential?.password && !els.password.value) els.password.value = credential.password;
+  } catch {
+    // Browser password managers can decline programmatic access.
+  }
+}
+
+async function storeBrowserCredential(email, password) {
+  if (!email || !password || !('credentials' in navigator) || !window.PasswordCredential) return;
+  try {
+    const credential = new PasswordCredential({ id: email, password, name: email });
+    await navigator.credentials.store(credential);
+  } catch {
+    // Saving remains controlled by the browser and the user.
+  }
+}
+
 function setupHumanTranslations() {
   for (const node of document.querySelectorAll('[data-human-text]')) {
     const originalText = node.textContent;
@@ -775,8 +796,8 @@ async function handleEncryptedHistory(email, password) {
     showRevealModal(changes, latest, snapshot);
   } catch (error) {
     if (error.name === 'OperationError') {
-      setHistoryStatus('无法解密历史，WebTESS 密码可能已改变。', 'bad');
-      if (els.historyChart) els.historyChart.innerHTML = '<p class="muted chart-empty">无法解密历史，请检查 WebTESS 密码。</p>';
+      setHistoryStatus('历史解不开，密码和第一次建立历史时不完全一样。', 'bad');
+      if (els.historyChart) els.historyChart.innerHTML = '<p class="muted chart-empty">成绩已正常抓取，但历史记录解不开。可能是第一次输入密码时多了空格、换了密码，或这个浏览器里已有旧历史。可以删除所有历史后重新抓取建立新基准。</p>';
       return;
     }
     setHistoryStatus(error.message || '历史功能暂时不可用', 'bad');
@@ -819,7 +840,7 @@ async function decryptHistoryRecords(records, email, password) {
 }
 
 async function deriveKey(email, password, saltBase64) {
-  const passphrase = normalizeEmail(email) + '\n' + password;
+  const passphrase = normalizeEmail(email) + '\n' + normalizePasswordForHistory(password);
   const baseKey = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(passphrase),
@@ -1075,6 +1096,10 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+function normalizePasswordForHistory(password) {
+  return String(password || '').trim();
+}
+
 els.password.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -1086,7 +1111,7 @@ els.form.addEventListener('submit', async (event) => {
   event.preventDefault();
   setStatus('抓取中');
   const email = els.email.value.trim();
-  const password = els.password.value;
+  const password = normalizePasswordForHistory(els.password.value);
   try {
     const response = await fetch('/api/scrape', {
       method: 'POST',
@@ -1101,6 +1126,7 @@ els.form.addEventListener('submit', async (event) => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '抓取失败');
     updateGrades(data);
+    await storeBrowserCredential(email, password);
     setStatus('抓取完成', 'ok');
     if (response.headers.get('X-History-Disabled')) {
       setHistoryStatus('历史功能需要配置 SESSION_SECRET', 'bad');
@@ -1171,5 +1197,6 @@ els.revealAllButton?.addEventListener('click', () => {
 });
 
 setupHumanTranslations();
+loadBrowserCredential();
 
 render();
