@@ -84,6 +84,25 @@
           <div id="assignmentChart" class="assignment-chart" aria-label="作业权重环形图"></div>
         </section>
 
+        <section class="panel history-panel">
+          <div class="panel-head">
+            <h2>加密成绩历史</h2>
+            <span id="historyStatus" class="status">等待抓取</span>
+          </div>
+          <p class="muted">历史记录只会用你当次输入的 WebTESS 邮箱和密码在浏览器里解密。WebTESS 密码不保存；如果密码改变，旧历史可能无法解密。</p>
+          <div id="historyChart" class="history-chart">
+            <p class="muted chart-empty">成功抓取一次后会建立加密历史基准。</p>
+          </div>
+          <div class="layout-actions">
+            <button id="historyExportButton" class="ghost compact" type="button">导出加密备份</button>
+            <button id="historyDeleteButton" class="ghost compact danger" type="button">删除所有历史</button>
+          </div>
+          <details class="layout-help privacy-help">
+            <summary>隐私说明</summary>
+            <p>数据库只保存 salt、IV 和 ciphertext。科目名、成绩、小成绩都在浏览器端加密后再上传，服务器和数据库管理员看到的只是一串密文。</p>
+          </details>
+        </section>
+
         <section class="panel prediction-panel">
           <div class="panel-head">
             <h2>成绩预测</h2>
@@ -117,6 +136,20 @@
         </section>
       </section>
     </main>
+
+    <div id="revealModal" class="modal-backdrop" hidden>
+      <section class="reveal-modal" role="dialog" aria-modal="true" aria-labelledby="revealTitle">
+        <div class="panel-head">
+          <h2 id="revealTitle">发现新成绩</h2>
+          <button id="revealCloseButton" class="icon-button" type="button" aria-label="关闭弹窗"><span>×</span></button>
+        </div>
+        <p class="muted">先保留一点悬念。点击每条变化旁边的按钮后才显示具体分数。</p>
+        <div id="revealList" class="reveal-list"></div>
+        <div class="layout-actions">
+          <button id="revealAllButton" class="primary compact" type="button">全部揭晓</button>
+        </div>
+      </section>
+    </div>
     <script src="./app.js" type="module"></script>
   </body>
 </html>

@@ -107,6 +107,7 @@ h2 {
   grid-template-areas:
     "login details"
     "average details"
+    "history history"
     "prediction prediction";
   gap: 18px 24px;
   align-items: start;
@@ -351,8 +352,13 @@ button:hover {
 }
 
 .prediction-panel,
+.history-panel,
 .table-panel {
   padding: 20px;
+}
+
+.history-panel {
+  grid-area: history;
 }
 
 .prediction-panel {
@@ -602,6 +608,105 @@ td {
   margin: 0;
 }
 
+.history-chart {
+  min-height: 240px;
+  border: 1px solid var(--line);
+  padding: 14px;
+  background: var(--bg);
+  overflow-x: auto;
+}
+
+.history-svg {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  height: 260px;
+}
+
+.history-axis,
+.history-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.history-line {
+  fill: none;
+  stroke-width: 2.4;
+}
+
+.history-point {
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+.history-label {
+  fill: var(--fg);
+  font-size: 11px;
+}
+
+.danger {
+  border-color: var(--line);
+}
+
+.danger:hover {
+  color: var(--bg);
+  background: var(--fg);
+}
+
+.privacy-help {
+  margin-top: 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: color-mix(in srgb, #000 72%, transparent);
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.reveal-modal {
+  width: min(760px, 100%);
+  max-height: min(760px, calc(100vh - 36px));
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  padding: 20px;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.reveal-list {
+  display: grid;
+  gap: 10px;
+}
+
+.reveal-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--line);
+  padding: 12px;
+}
+
+.reveal-item h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.reveal-secret {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
 .course-details {
   border: 1px solid var(--line);
   padding: 10px 12px;
@@ -650,6 +755,7 @@ td {
       "login"
       "average"
       "details"
+      "history"
       "prediction";
   }
 
@@ -716,6 +822,10 @@ td {
   }
 
   .detail-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .reveal-item {
     grid-template-columns: 1fr;
   }
 }

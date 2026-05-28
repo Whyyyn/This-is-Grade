@@ -2,7 +2,9 @@ const state = {
   grades: [],
   selected: new Set(loadPinnedSubjects()),
   urlPinned: loadUrlPinnedSubjects(),
-  detailSubject: ''
+  detailSubject: '',
+  revealedChanges: new Set(),
+  latestChanges: []
 };
 
 const els = {
@@ -22,6 +24,14 @@ const els = {
   themeToggleButton: document.querySelector('#themeToggleButton'),
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
+  historyStatus: document.querySelector('#historyStatus'),
+  historyChart: document.querySelector('#historyChart'),
+  historyExportButton: document.querySelector('#historyExportButton'),
+  historyDeleteButton: document.querySelector('#historyDeleteButton'),
+  revealModal: document.querySelector('#revealModal'),
+  revealList: document.querySelector('#revealList'),
+  revealAllButton: document.querySelector('#revealAllButton'),
+  revealCloseButton: document.querySelector('#revealCloseButton'),
   predictionCourse: document.querySelector('#predictionCourse'),
   predictionCategory: document.querySelector('#predictionCategory'),
   predictionScore: document.querySelector('#predictionScore'),
@@ -93,38 +103,11 @@ function toggleTheme() {
   applyTheme(current === 'light' ? 'dark' : 'light');
 }
 
-async function loadSavedCredential() {
-  const rememberedEmail = localStorage.getItem('webtess-email');
-  if (rememberedEmail && !els.email.value) els.email.value = rememberedEmail;
-  if (!('credentials' in navigator) || !window.PasswordCredential) return;
-  try {
-    const credential = await navigator.credentials.get({ password: true, mediation: 'optional' });
-    if (credential?.id && !els.email.value) els.email.value = credential.id;
-    if (credential?.password && !els.password.value) els.password.value = credential.password;
-  } catch {
-    // Some browsers intentionally block programmatic password access.
-  }
-}
-
-async function storeCredential() {
-  const email = els.email.value.trim();
-  const password = els.password.value;
-  if (email) localStorage.setItem('webtess-email', email);
-  if (!email || !password || !('credentials' in navigator) || !window.PasswordCredential) return;
-  try {
-    const credential = new PasswordCredential({ id: email, password, name: email });
-    await navigator.credentials.store(credential);
-  } catch {
-    // Browser password managers may decline to save credentials for security reasons.
-  }
-}
-
 function updateGrades(grades) {
   state.grades = grades
     .map((grade) => ({
       subject: String(grade.subject || '').trim(),
       score: Number(grade.score),
-      raw: grade.raw || '',
       assignments: normalizeAssignments(grade.assignments || [])
     }))
     .filter((grade) => grade.subject && Number.isFinite(grade.score))
@@ -563,7 +546,7 @@ function renderAssignmentChart() {
   const detail = document.createElement('p');
   detail.className = 'chart-detail muted';
   const showItemDetail = (item) => {
-    detail.textContent = item.title + ' | weight ' + roundHundredths(item.displayWeight) + '% | score ' + roundHundredths(item.scorePercent) + '% | ' + formatPoints(item.raw);
+    detail.textContent = item.title + ' | weight ' + roundHundredths(item.displayWeight) + '% | score ' + roundHundredths(item.scorePercent) + '% | ' + formatPoints(item.assignment);
     for (const node of chart.querySelectorAll('[data-chart-item]')) {
       node.dataset.active = node.dataset.chartItem === item.id ? 'true' : 'false';
     }
@@ -582,7 +565,7 @@ function renderAssignmentChart() {
     row.innerHTML =
       '<span class="legend-swatch" style="--swatch:' + item.color + '"></span>' +
       '<span class="legend-text"><strong>' + escapeHtml(item.title) + '</strong><small>' +
-      roundHundredths(item.displayWeight) + '% · ' + roundHundredths(item.scorePercent) + '% · ' + escapeHtml(formatPoints(item.raw)) +
+      roundHundredths(item.displayWeight) + '% · ' + roundHundredths(item.scorePercent) + '% · ' + escapeHtml(formatPoints(item.assignment)) +
       '</small></span>';
     row.addEventListener('mouseenter', () => showItemDetail(item));
     row.addEventListener('focus', () => showItemDetail(item));
@@ -612,7 +595,7 @@ function buildChartItems(assignments) {
     const weight = weights[index];
     return {
       id: 'assignment-' + index,
-      raw: item,
+      assignment: item,
       title: item.title,
       displayWeight: hasWeights ? weight : 100 / assignments.length,
       share: weight / total,
@@ -734,6 +717,346 @@ function escapeHtml(value) {
   }[char]));
 }
 
+function setHistoryStatus(text, tone = '') {
+  if (!els.historyStatus) return;
+  els.historyStatus.textContent = text;
+  els.historyStatus.dataset.tone = tone;
+}
+
+async function handleEncryptedHistory(email, password) {
+  if (!email || !password || !state.grades.length) return;
+  if (!crypto?.subtle) {
+    setHistoryStatus('浏览器不支持加密历史', 'bad');
+    return;
+  }
+  try {
+    const records = await fetchEncryptedHistory();
+    const snapshot = createHistorySnapshot();
+    if (!records.length) {
+      const salt = randomBase64(16);
+      const key = await deriveKey(email, password, salt);
+      await saveEncryptedSnapshot(await encryptSnapshot(snapshot, key, salt));
+      setHistoryStatus('已建立历史基准', 'ok');
+      renderHistoryChart([snapshot]);
+      return;
+    }
+
+    const key = await deriveKey(email, password, records[0].salt);
+    const latest = await decryptSnapshot(records.at(-1), key);
+    const changes = compareSnapshots(latest, snapshot);
+    const decrypted = await decryptHistoryRecords(records, email, password);
+    if (!changes.length) {
+      setHistoryStatus('没有发现新成绩变化', 'ok');
+      renderHistoryChart(decrypted);
+      return;
+    }
+
+    await saveEncryptedSnapshot(await encryptSnapshot(snapshot, key, records[0].salt));
+    setHistoryStatus('发现新成绩变化', 'ok');
+    renderHistoryChart([...decrypted, snapshot]);
+    showRevealModal(changes, latest, snapshot);
+  } catch (error) {
+    if (error.name === 'OperationError') {
+      setHistoryStatus('无法解密历史，WebTESS 密码可能已改变。', 'bad');
+      if (els.historyChart) els.historyChart.innerHTML = '<p class="muted chart-empty">无法解密历史，请检查 WebTESS 密码。</p>';
+      return;
+    }
+    setHistoryStatus(error.message || '历史功能暂时不可用', 'bad');
+  }
+}
+
+async function fetchEncryptedHistory() {
+  const response = await fetch('/api/history?limit=120', { credentials: 'same-origin' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || '历史功能暂时不可用');
+  return Array.isArray(data.snapshots) ? data.snapshots : [];
+}
+
+async function saveEncryptedSnapshot(record) {
+  const response = await fetch('/api/history', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(record)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || '历史保存失败');
+  return data;
+}
+
+async function deleteEncryptedHistory() {
+  const response = await fetch('/api/history', { method: 'DELETE', credentials: 'same-origin' });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || '删除失败');
+}
+
+async function decryptHistoryRecords(records, email, password) {
+  const snapshots = [];
+  const keys = new Map();
+  for (const record of records) {
+    if (!keys.has(record.salt)) keys.set(record.salt, await deriveKey(email, password, record.salt));
+    snapshots.push(await decryptSnapshot(record, keys.get(record.salt)));
+  }
+  return snapshots.sort((a, b) => new Date(a.capturedAt) - new Date(b.capturedAt));
+}
+
+async function deriveKey(email, password, saltBase64) {
+  const passphrase = normalizeEmail(email) + '\n' + password;
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(passphrase),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: base64ToBytes(saltBase64), iterations: 310000, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptSnapshot(snapshot, key, salt) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(JSON.stringify(snapshot))
+  );
+  return {
+    salt,
+    iv: bytesToBase64(iv),
+    ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
+    schema_version: 1
+  };
+}
+
+async function decryptSnapshot(record, key) {
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(record.iv) },
+    key,
+    base64ToBytes(record.ciphertext)
+  );
+  const snapshot = JSON.parse(new TextDecoder().decode(plaintext));
+  return sanitizeSnapshot(snapshot);
+}
+
+function createHistorySnapshot() {
+  return sanitizeSnapshot({
+    capturedAt: new Date().toISOString(),
+    grades: state.grades.map((grade) => ({
+      subject: grade.subject,
+      score: roundHundredths(grade.score),
+      assignments: grade.assignments.map((item) => ({
+        category: item.category,
+        title: item.title,
+        earned: item.earned,
+        possible: item.possible,
+        scorePercent: roundHundredths(item.scorePercent),
+        itemWeight: roundHundredths(item.itemWeight)
+      }))
+    }))
+  });
+}
+
+function sanitizeSnapshot(snapshot) {
+  return {
+    capturedAt: String(snapshot?.capturedAt || new Date().toISOString()),
+    grades: Array.isArray(snapshot?.grades) ? snapshot.grades.map((grade) => ({
+      subject: String(grade.subject || '').trim(),
+      score: Number(grade.score),
+      assignments: Array.isArray(grade.assignments) ? grade.assignments.map((item) => ({
+        category: String(item.category || '').trim() || '未分类',
+        title: String(item.title || '').trim() || 'Item',
+        earned: numericOrNull(item.earned),
+        possible: numericOrNull(item.possible),
+        scorePercent: Number(item.scorePercent),
+        itemWeight: Number(item.itemWeight) || 0
+      })).filter((item) => Number.isFinite(item.scorePercent)) : []
+    })).filter((grade) => grade.subject && Number.isFinite(grade.score)) : []
+  };
+}
+
+function compareSnapshots(oldSnapshot, newSnapshot) {
+  const changes = [];
+  const oldCourses = new Map(oldSnapshot.grades.map((grade) => [grade.subject, grade]));
+  const selectedSubjects = [...state.selected];
+  const oldAverage = averageForSubjects(oldSnapshot, selectedSubjects);
+  const newAverage = averageForSubjects(newSnapshot, selectedSubjects);
+  for (const newCourse of newSnapshot.grades) {
+    const oldCourse = oldCourses.get(newCourse.subject);
+    if (!oldCourse) continue;
+    const courseDelta = roundHundredths(newCourse.score - oldCourse.score);
+    if (Math.abs(courseDelta) >= 0.01) {
+      changes.push(createChange('course-score', newCourse.subject, '科目总分变化', oldCourse, newCourse, null, null, oldAverage, newAverage));
+    }
+    const oldAssignments = new Map(oldCourse.assignments.map((item) => [assignmentKey(item), item]));
+    for (const item of newCourse.assignments) {
+      const oldItem = oldAssignments.get(assignmentKey(item));
+      if (!oldItem) {
+        changes.push(createChange('new-assignment', newCourse.subject, item.title, oldCourse, newCourse, null, item, oldAverage, newAverage));
+        continue;
+      }
+      if (Math.abs((item.scorePercent || 0) - (oldItem.scorePercent || 0)) >= 0.01) {
+        changes.push(createChange('assignment-score', newCourse.subject, item.title, oldCourse, newCourse, oldItem, item, oldAverage, newAverage));
+      } else if (Math.abs((item.itemWeight || 0) - (oldItem.itemWeight || 0)) >= 0.01) {
+        changes.push(createChange('assignment-weight', newCourse.subject, item.title, oldCourse, newCourse, oldItem, item, oldAverage, newAverage));
+      }
+    }
+  }
+  return changes;
+}
+
+function createChange(type, subject, title, oldCourse, newCourse, oldItem, newItem, oldAverage, newAverage) {
+  return { type, subject, title, oldCourse, newCourse, oldItem, newItem, oldAverage, newAverage };
+}
+
+function assignmentKey(item) {
+  return normalizeSubjectKey((item.category || '') + '|' + (item.title || ''));
+}
+
+function averageForSubjects(snapshot, subjects) {
+  if (subjects.length !== 4) return null;
+  const values = subjects.map((subject) => snapshot.grades.find((grade) => grade.subject === subject)?.score);
+  if (values.some((value) => !Number.isFinite(value))) return null;
+  return averageDetails(values);
+}
+
+function showRevealModal(changes) {
+  state.latestChanges = changes;
+  state.revealedChanges = new Set();
+  renderRevealList();
+  if (els.revealModal) els.revealModal.hidden = false;
+}
+
+function renderRevealList() {
+  if (!els.revealList) return;
+  els.revealList.innerHTML = '';
+  state.latestChanges.forEach((change, index) => {
+    const item = document.createElement('article');
+    item.className = 'reveal-item';
+    const summary = document.createElement('div');
+    const title = document.createElement('h3');
+    title.textContent = change.subject;
+    const hint = document.createElement('p');
+    hint.className = 'muted inline-empty';
+    hint.textContent = change.title || describeChangeType(change.type);
+    summary.append(title, hint);
+    const button = document.createElement('button');
+    button.className = 'ghost compact';
+    button.type = 'button';
+    button.textContent = state.revealedChanges.has(index) ? '已揭晓' : '点击揭晓';
+    button.addEventListener('click', () => {
+      state.revealedChanges.add(index);
+      renderRevealList();
+    });
+    item.append(summary, button);
+    if (state.revealedChanges.has(index)) {
+      const secret = document.createElement('p');
+      secret.className = 'reveal-secret muted';
+      secret.textContent = revealText(change);
+      item.append(secret);
+    }
+    els.revealList.append(item);
+  });
+}
+
+function revealText(change) {
+  const pieces = [];
+  if (change.newItem) {
+    if (change.oldItem) {
+      pieces.push('旧分数 ' + roundHundredths(change.oldItem.scorePercent) + '%，新分数 ' + roundHundredths(change.newItem.scorePercent) + '%');
+      pieces.push('旧权重 ' + roundHundredths(change.oldItem.itemWeight) + '%，新权重 ' + roundHundredths(change.newItem.itemWeight) + '%');
+    } else {
+      pieces.push('新增作业：' + roundHundredths(change.newItem.scorePercent) + '%，权重 ' + roundHundredths(change.newItem.itemWeight) + '%');
+    }
+  }
+  pieces.push('科目总分 ' + roundHundredths(change.oldCourse.score) + '% -> ' + roundHundredths(change.newCourse.score) + '%');
+  if (change.oldAverage && change.newAverage) {
+    pieces.push('四科均分 ' + change.oldAverage.rounded + ' -> ' + change.newAverage.rounded + '，未四舍五入 ' + roundHundredths(change.oldAverage.raw) + ' -> ' + roundHundredths(change.newAverage.raw));
+  }
+  return pieces.join('；');
+}
+
+function describeChangeType(type) {
+  return {
+    'course-score': '科目总分变化',
+    'new-assignment': '新增作业',
+    'assignment-score': '作业分数变化',
+    'assignment-weight': '作业权重变化'
+  }[type] || '成绩变化';
+}
+
+function renderHistoryChart(snapshots) {
+  if (!els.historyChart) return;
+  if (!snapshots.length) {
+    els.historyChart.innerHTML = '<p class="muted chart-empty">暂无历史记录。</p>';
+    return;
+  }
+  const subjects = [...new Set(snapshots.flatMap((snapshot) => snapshot.grades.map((grade) => grade.subject)))];
+  const width = 900;
+  const height = 260;
+  const padding = 34;
+  const maxScore = Math.max(105, ...snapshots.flatMap((snapshot) => snapshot.grades.map((grade) => grade.score)));
+  const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
+  const xFor = (index) => padding + (snapshots.length === 1 ? 0.5 : index / (snapshots.length - 1)) * (width - padding * 2);
+  const yFor = (score) => height - padding - (score / maxScore) * (height - padding * 2);
+  const lines = subjects.map((subject, subjectIndex) => {
+    const points = snapshots.map((snapshot, index) => {
+      const grade = snapshot.grades.find((item) => item.subject === subject);
+      return grade ? { x: xFor(index), y: yFor(grade.score), score: grade.score } : null;
+    }).filter(Boolean);
+    if (!points.length) return '';
+    const path = points.map((point, index) => (index ? 'L' : 'M') + point.x + ' ' + point.y).join(' ');
+    const color = colors[subjectIndex % colors.length];
+    const dots = points.map((point) => `<circle class="history-point" cx="${point.x}" cy="${point.y}" r="3.5" fill="${color}"><title>${escapeHtml(subject)} ${roundHundredths(point.score)}%</title></circle>`).join('');
+    return `<path class="history-line" d="${path}" stroke="${color}"></path>${dots}<text class="history-label" x="${points.at(-1).x + 6}" y="${points.at(-1).y + 4}">${escapeHtml(subject.slice(0, 22))}</text>`;
+  }).join('');
+  els.historyChart.innerHTML = `
+    <svg class="history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="成绩历史折线图">
+      <line class="history-axis" x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}"></line>
+      <line class="history-axis" x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}"></line>
+      <line class="history-grid" x1="${padding}" y1="${yFor(100)}" x2="${width - padding}" y2="${yFor(100)}"></line>
+      <text class="history-label" x="8" y="${yFor(100) + 4}">100</text>
+      ${lines}
+    </svg>`;
+}
+
+async function exportEncryptedBackup() {
+  const records = await fetchEncryptedHistory();
+  const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), snapshots: records }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'encrypted-grade-history.json';
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function randomBase64(length) {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return bytesToBase64(bytes);
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 els.password.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -744,21 +1067,28 @@ els.password.addEventListener('keydown', (event) => {
 els.form.addEventListener('submit', async (event) => {
   event.preventDefault();
   setStatus('抓取中');
+  const email = els.email.value.trim();
+  const password = els.password.value;
   try {
     const response = await fetch('/api/scrape', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: els.email.value.trim(),
-        password: els.password.value,
+        email,
+        password,
         url: els.url.value.trim()
       })
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '抓取失败');
     updateGrades(data);
-    await storeCredential();
     setStatus('抓取完成', 'ok');
+    if (response.headers.get('X-History-Disabled')) {
+      setHistoryStatus('历史功能需要配置 SESSION_SECRET', 'bad');
+    } else {
+      await handleEncryptedHistory(email, password);
+    }
   } catch (error) {
     setStatus(error.message, 'bad');
   }
@@ -793,6 +1123,33 @@ els.exportButton.addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-loadSavedCredential();
+els.historyExportButton?.addEventListener('click', async () => {
+  try {
+    await exportEncryptedBackup();
+    setHistoryStatus('已导出密文备份', 'ok');
+  } catch (error) {
+    setHistoryStatus(error.message || '导出失败', 'bad');
+  }
+});
+
+els.historyDeleteButton?.addEventListener('click', async () => {
+  if (!window.confirm('确定删除所有加密历史记录吗？这个操作不能恢复。')) return;
+  try {
+    await deleteEncryptedHistory();
+    if (els.historyChart) els.historyChart.innerHTML = '<p class="muted chart-empty">历史记录已删除。</p>';
+    setHistoryStatus('历史已删除', 'ok');
+  } catch (error) {
+    setHistoryStatus(error.message || '删除失败', 'bad');
+  }
+});
+
+els.revealCloseButton?.addEventListener('click', () => {
+  if (els.revealModal) els.revealModal.hidden = true;
+});
+
+els.revealAllButton?.addEventListener('click', () => {
+  state.latestChanges.forEach((_, index) => state.revealedChanges.add(index));
+  renderRevealList();
+});
 
 render();

@@ -9,6 +9,7 @@ Cloudflare Pages + Pages Functions version of the WebTESS grade dashboard.
 - Returns course grades and assignment-level details to the browser.
 - Does not store WebTESS passwords.
 - Does not include any personal grades or debug files.
+- Saves optional grade history only as browser-encrypted ciphertext.
 
 ## Deploy With Cloudflare Dashboard
 
@@ -28,6 +29,14 @@ Root directory: /
 
 Cloudflare will detect the `functions/` folder and publish `/api/scrape` as a Pages Function.
 
+## Encrypted History Setup
+
+Create a Cloudflare D1 database and bind it to the Pages project as `DB`.
+
+Run the migration in `migrations/0001_encrypted_grade_snapshots.sql`.
+
+Add a Pages secret named `SESSION_SECRET` with a long random value. This is only used to sign the login session cookie after a successful WebTESS scrape.
+
 ## Local Dev
 
 Install Node.js, then:
@@ -41,4 +50,6 @@ Open the local URL printed by Wrangler.
 
 ## Privacy
 
-The app asks for WebTESS credentials in the browser, sends them to the Pages Function, and uses them only for that request. The first version does not use Supabase and does not save history.
+The app asks for WebTESS credentials in the browser, sends them to the Pages Function, and uses them only for that request. WebTESS passwords are not written to the database, URL, localStorage, or logs.
+
+History snapshots are encrypted in the browser with AES-GCM. The AES key is derived with PBKDF2 from the WebTESS email and password plus a random salt. D1 stores only `user_id`, `created_at`, `salt`, `iv`, `ciphertext`, and `schema_version`.

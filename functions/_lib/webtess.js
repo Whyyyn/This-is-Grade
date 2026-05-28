@@ -48,8 +48,7 @@ export async function scrapeGrades({ email, password, url = DEFAULT_URL }) {
   }
 
   if (!courses.length) {
-    const pageHint = compactSnippet(parentHtml);
-    throw new Error('Logged in, but no gradebook courses were found. WebTESS may have returned a temporary login/session page. Try again in a few seconds. Page starts with: ' + pageHint);
+    throw new Error('Logged in, but no gradebook courses were found. Try again in a few seconds.');
   }
 
   const results = await Promise.all(courses.map((course) => fetchCourseGrade(session, course)));
@@ -133,8 +132,7 @@ function extractGradebookButtons(html) {
       stid: params[0],
       masid: params[1],
       crsid: params[2],
-      crsnum: params[3],
-      raw: cells.join(' | ')
+      crsnum: params[3]
     });
   }
   return courses;
@@ -155,13 +153,12 @@ async function fetchCourseGrade(session, course) {
   const text = await response.text();
   const parsed = parseGradebookSummary(text);
   if (parsed.score === null) {
-    return { subject: course.subject, score: null, assignments: [], raw: '', source: 'gradebook' };
+    return { subject: course.subject, score: null, assignments: [], source: 'gradebook' };
   }
   return {
     subject: parsed.subject || course.subject,
     score: parsed.score,
     assignments: parsed.assignments,
-    raw: '',
     source: 'gradebook'
   };
 }
