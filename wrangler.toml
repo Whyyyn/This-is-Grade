@@ -1,3 +1,8 @@
 name = "this-is-grade"
 compatibility_date = "2026-05-21"
 pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "this-is-grade-history"
+database_id = "3df9e142-b4bd-4ac9-9eae-8700908bdd5e"
