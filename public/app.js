@@ -246,6 +246,24 @@ function copyLayoutLink() {
   });
 }
 
+function setupHumanTranslations() {
+  for (const node of document.querySelectorAll('[data-human-text]')) {
+    const originalText = node.textContent;
+    const humanText = node.dataset.humanText;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'human-toggle';
+    button.textContent = '翻译成：人话';
+    button.addEventListener('click', () => {
+      const showingHuman = node.dataset.showingHuman === 'true';
+      node.textContent = showingHuman ? originalText : humanText;
+      node.dataset.showingHuman = showingHuman ? 'false' : 'true';
+      button.textContent = showingHuman ? '翻译成：人话' : '切回：官方话';
+    });
+    node.insertAdjacentElement('afterend', button);
+  }
+}
+
 function render() {
   ensureDetailSubject();
   renderPicker();
@@ -1151,5 +1169,7 @@ els.revealAllButton?.addEventListener('click', () => {
   state.latestChanges.forEach((_, index) => state.revealedChanges.add(index));
   renderRevealList();
 });
+
+setupHumanTranslations();
 
 render();

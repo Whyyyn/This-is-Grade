@@ -55,7 +55,7 @@
             <button id="copyLayoutButton" class="ghost compact" type="button">复制布局链接</button>
             <details class="layout-help">
               <summary>这是什么意思？</summary>
-              <p>Safari 有时不会稳定记住你展示的四门课。这个功能会把当前展示课程写进网址里的 show 参数。复制或收藏这个链接，下次打开就会恢复同样的四门课。</p>
+              <p data-human-text="以后打开这个复制的链接就行了">Safari 有时不会稳定记住你展示的四门课。这个功能会把当前展示课程写进网址里的 show 参数。复制或收藏这个链接，下次打开就会恢复同样的四门课。</p>
             </details>
           </div>
         </section>
@@ -89,7 +89,7 @@
             <h2>加密成绩历史</h2>
             <span id="historyStatus" class="status">等待抓取</span>
           </div>
-          <p class="muted">历史记录只会用你当次输入的 WebTESS 邮箱和密码在浏览器里解密。WebTESS 密码不保存；如果密码改变，旧历史可能无法解密。</p>
+          <p class="muted" data-human-text="历史记录功能用的是你的 WebTESS 密码，而且很神秘。你改了 WebTESS 密码可能没办法用了就">历史记录只会用你当次输入的 WebTESS 邮箱和密码在浏览器里解密。WebTESS 密码不保存；如果密码改变，旧历史可能无法解密。</p>
           <div id="historyChart" class="history-chart">
             <p class="muted chart-empty">成功抓取一次后会建立加密历史基准。</p>
           </div>
@@ -99,7 +99,7 @@
           </div>
           <details class="layout-help privacy-help">
             <summary>隐私说明</summary>
-            <p>数据库只保存 salt、IV 和 ciphertext。科目名、成绩、小成绩都在浏览器端加密后再上传，服务器和数据库管理员看到的只是一串密文。</p>
+            <p data-human-text="你的成绩/账密在我这里也看不到！我这里看是一团乱码，只有在你的浏览器才能解密">数据库只保存 salt、IV 和 ciphertext。科目名、成绩、小成绩都在浏览器端加密后再上传，服务器和数据库管理员看到的只是一串密文。</p>
           </details>
         </section>
 

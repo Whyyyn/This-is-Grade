@@ -340,6 +340,15 @@ button:hover {
   line-height: 1.5;
 }
 
+.human-toggle {
+  min-height: 26px;
+  margin: 8px 0 0;
+  padding: 2px 8px;
+  color: var(--fg);
+  border-color: var(--line);
+  font-size: 12px;
+}
+
 .empty-state {
   display: grid;
   min-height: 420px;
