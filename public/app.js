@@ -784,15 +784,20 @@ async function handleEncryptedHistory(email, password) {
     const latest = await decryptSnapshot(records.at(-1), key);
     const changes = compareSnapshots(latest, snapshot);
     const decrypted = await decryptHistoryRecords(records, email, password);
-    if (!changes.length) {
-      setHistoryStatus('没有发现新成绩变化', 'ok');
+    const hasGradeChanges = hasSnapshotGradeChanges(latest, snapshot);
+    if (!hasGradeChanges) {
+      setHistoryStatus('没有发现成绩变化', 'ok');
       renderHistoryChart(decrypted);
       return;
     }
 
     await saveEncryptedSnapshot(await encryptSnapshot(snapshot, key, records[0].salt));
-    setHistoryStatus('发现新成绩变化', 'ok');
     renderHistoryChart([...decrypted, snapshot]);
+    if (!changes.length) {
+      setHistoryStatus('成绩有变化，没有新增/删去成绩', 'ok');
+      return;
+    }
+    setHistoryStatus('发现新增/删去成绩', 'ok');
     showRevealModal(changes, latest, snapshot);
   } catch (error) {
     if (error.name === 'OperationError') {
@@ -927,25 +932,49 @@ function compareSnapshots(oldSnapshot, newSnapshot) {
   for (const newCourse of newSnapshot.grades) {
     const oldCourse = oldCourses.get(newCourse.subject);
     if (!oldCourse) continue;
-    const courseDelta = roundHundredths(newCourse.score - oldCourse.score);
-    if (Math.abs(courseDelta) >= 0.01) {
-      changes.push(createChange('course-score', newCourse.subject, '科目总分变化', oldCourse, newCourse, null, null, oldAverage, newAverage));
-    }
     const oldAssignments = new Map(oldCourse.assignments.map((item) => [assignmentKey(item), item]));
+    const newAssignments = new Map(newCourse.assignments.map((item) => [assignmentKey(item), item]));
     for (const item of newCourse.assignments) {
       const oldItem = oldAssignments.get(assignmentKey(item));
       if (!oldItem) {
         changes.push(createChange('new-assignment', newCourse.subject, item.title, oldCourse, newCourse, null, item, oldAverage, newAverage));
-        continue;
       }
-      if (Math.abs((item.scorePercent || 0) - (oldItem.scorePercent || 0)) >= 0.01) {
-        changes.push(createChange('assignment-score', newCourse.subject, item.title, oldCourse, newCourse, oldItem, item, oldAverage, newAverage));
-      } else if (Math.abs((item.itemWeight || 0) - (oldItem.itemWeight || 0)) >= 0.01) {
-        changes.push(createChange('assignment-weight', newCourse.subject, item.title, oldCourse, newCourse, oldItem, item, oldAverage, newAverage));
+    }
+    for (const item of oldCourse.assignments) {
+      if (!newAssignments.has(assignmentKey(item))) {
+        changes.push(createChange('deleted-assignment', newCourse.subject, item.title, oldCourse, newCourse, item, null, oldAverage, newAverage));
       }
     }
   }
   return changes;
+}
+
+function hasSnapshotGradeChanges(oldSnapshot, newSnapshot) {
+  const oldCourses = new Map(oldSnapshot.grades.map((grade) => [grade.subject, grade]));
+  const newCourses = new Map(newSnapshot.grades.map((grade) => [grade.subject, grade]));
+  if (oldCourses.size !== newCourses.size) return true;
+  for (const [subject, newCourse] of newCourses) {
+    const oldCourse = oldCourses.get(subject);
+    if (!oldCourse) return true;
+    if (Math.abs((newCourse.score || 0) - (oldCourse.score || 0)) >= 0.01) return true;
+    const oldAssignments = new Map(oldCourse.assignments.map((item) => [assignmentKey(item), item]));
+    const newAssignments = new Map(newCourse.assignments.map((item) => [assignmentKey(item), item]));
+    if (oldAssignments.size !== newAssignments.size) return true;
+    for (const [key, newItem] of newAssignments) {
+      const oldItem = oldAssignments.get(key);
+      if (!oldItem) return true;
+      if (Math.abs((newItem.scorePercent || 0) - (oldItem.scorePercent || 0)) >= 0.01) return true;
+      if (Math.abs((newItem.itemWeight || 0) - (oldItem.itemWeight || 0)) >= 0.01) return true;
+      if (valueChanged(newItem.earned, oldItem.earned)) return true;
+      if (valueChanged(newItem.possible, oldItem.possible)) return true;
+    }
+  }
+  return false;
+}
+
+function valueChanged(nextValue, previousValue) {
+  if (nextValue === null || previousValue === null) return nextValue !== previousValue;
+  return Math.abs(Number(nextValue) - Number(previousValue)) >= 0.01;
 }
 
 function createChange(type, subject, title, oldCourse, newCourse, oldItem, newItem, oldAverage, newAverage) {
@@ -981,36 +1010,38 @@ function renderRevealList() {
     title.textContent = change.subject;
     const hint = document.createElement('p');
     hint.className = 'muted inline-empty';
-    hint.textContent = change.title || describeChangeType(change.type);
+    hint.textContent = describeChangeType(change.type) + ' · ' + (change.title || '未命名成绩');
     summary.append(title, hint);
-    const button = document.createElement('button');
-    button.className = 'ghost compact';
-    button.type = 'button';
-    button.textContent = state.revealedChanges.has(index) ? '已揭晓' : '点击揭晓';
-    button.addEventListener('click', () => {
-      state.revealedChanges.add(index);
-      renderRevealList();
+    const badge = document.createElement('span');
+    badge.className = 'reveal-badge';
+    badge.textContent = change.type === 'deleted-assignment' ? '删去' : '新增';
+    item.append(summary, badge);
+
+    const details = document.createElement('details');
+    details.className = 'reveal-details';
+    details.open = state.revealedChanges.has(index);
+    const detailsSummary = document.createElement('summary');
+    detailsSummary.textContent = '查看引起的变化';
+    const secret = document.createElement('p');
+    secret.className = 'reveal-secret muted';
+    secret.textContent = revealText(change);
+    details.append(detailsSummary, secret);
+    details.addEventListener('toggle', () => {
+      if (details.open) state.revealedChanges.add(index);
+      else state.revealedChanges.delete(index);
     });
-    item.append(summary, button);
-    if (state.revealedChanges.has(index)) {
-      const secret = document.createElement('p');
-      secret.className = 'reveal-secret muted';
-      secret.textContent = revealText(change);
-      item.append(secret);
-    }
+    item.append(details);
     els.revealList.append(item);
   });
 }
 
 function revealText(change) {
   const pieces = [];
-  if (change.newItem) {
-    if (change.oldItem) {
-      pieces.push('旧分数 ' + roundHundredths(change.oldItem.scorePercent) + '%，新分数 ' + roundHundredths(change.newItem.scorePercent) + '%');
-      pieces.push('旧权重 ' + roundHundredths(change.oldItem.itemWeight) + '%，新权重 ' + roundHundredths(change.newItem.itemWeight) + '%');
-    } else {
-      pieces.push('新增作业：' + roundHundredths(change.newItem.scorePercent) + '%，权重 ' + roundHundredths(change.newItem.itemWeight) + '%');
-    }
+  if (change.type === 'new-assignment' && change.newItem) {
+    pieces.push('新增成绩：' + roundHundredths(change.newItem.scorePercent) + '%，权重 ' + roundHundredths(change.newItem.itemWeight) + '%，得分 ' + formatSnapshotPoints(change.newItem));
+  }
+  if (change.type === 'deleted-assignment' && change.oldItem) {
+    pieces.push('删去成绩：' + roundHundredths(change.oldItem.scorePercent) + '%，权重 ' + roundHundredths(change.oldItem.itemWeight) + '%，得分 ' + formatSnapshotPoints(change.oldItem));
   }
   pieces.push('科目总分 ' + roundHundredths(change.oldCourse.score) + '% -> ' + roundHundredths(change.newCourse.score) + '%');
   if (change.oldAverage && change.newAverage) {
@@ -1021,11 +1052,15 @@ function revealText(change) {
 
 function describeChangeType(type) {
   return {
-    'course-score': '科目总分变化',
-    'new-assignment': '新增作业',
-    'assignment-score': '作业分数变化',
-    'assignment-weight': '作业权重变化'
+    'new-assignment': '新增成绩',
+    'deleted-assignment': '删去成绩'
   }[type] || '成绩变化';
+}
+
+function formatSnapshotPoints(item) {
+  if (item.earned !== null && item.possible !== null) return roundHundredths(item.earned) + ' / ' + roundHundredths(item.possible);
+  if (item.earned !== null) return String(roundHundredths(item.earned));
+  return '--';
 }
 
 function renderHistoryChart(snapshots) {

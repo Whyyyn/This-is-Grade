@@ -709,11 +709,31 @@ td {
   font-size: 15px;
 }
 
-.reveal-secret {
+.reveal-badge {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reveal-details {
   grid-column: 1 / -1;
   margin: 4px 0 0;
   border-top: 1px solid var(--line);
   padding-top: 10px;
+}
+
+.reveal-details summary {
+  cursor: pointer;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.reveal-secret {
+  margin: 8px 0 0;
 }
 
 .course-details {
