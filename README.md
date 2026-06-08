@@ -48,6 +48,10 @@ npm run dev
 
 Open the local URL printed by Wrangler.
 
+The app uses Tailwind CSS as a build step. Edit `src/styles.css`; `npm run dev`
+builds `public/styles.css` before starting Wrangler. During style-heavy work, run
+`npm run dev:css` in a second terminal to watch CSS changes.
+
 ## Privacy
 
 The app asks for WebTESS credentials in the browser, sends them to the Pages Function, and uses them only for that request. WebTESS passwords are not written to the database, URL, localStorage, or logs.

@@ -4,10 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler pages dev public",
-    "deploy": "wrangler pages deploy public --project-name this-is-grade"
+    "build": "npm run build:css",
+    "build:css": "tailwindcss -i ./src/styles.css -o ./public/styles.css --minify",
+    "dev": "npm run build:css && sh -c 'tailwindcss -i ./src/styles.css -o ./public/styles.css --watch & wrangler pages dev public; kill $!'",
+    "dev:css": "tailwindcss -i ./src/styles.css -o ./public/styles.css --watch",
+    "deploy": "npm run build && wrangler pages deploy public --project-name this-is-grade"
   },
   "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.16",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.16",
+    "tailwindcss-animate": "^1.0.7",
     "wrangler": "^4.0.0"
   }
 }
