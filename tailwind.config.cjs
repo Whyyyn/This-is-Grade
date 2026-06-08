@@ -17,6 +17,23 @@ module.exports = {
         display: ['"Century Gothic"', '"Avenir Next"', ...fontFamily.sans],
       },
       colors: {
+        primary: {
+          50: "#f7ffe6",
+          500: "#9cff00",
+          600: "#7fd600",
+        },
+        secondary: {
+          50: "#ffffff",
+          500: "#111111",
+          900: "#050505",
+        },
+        neutral: {
+          100: "#f4f4f4",
+          300: "#cfcfcf",
+          500: "#8f8f8f",
+          700: "#3a3a3a",
+          900: "#151515",
+        },
         page: {
           ink: "#111111",
           paper: "#f4f2ec",

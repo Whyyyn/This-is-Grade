@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Creative Agency Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="min-h-screen overflow-hidden bg-neutral-100 font-sans text-secondary-500 dark:bg-secondary-900 dark:text-secondary-50">
+    <main class="relative flex min-h-screen flex-col overflow-hidden pb-16 md:pb-20">
+      <nav class="fixed right-4 top-4 z-30 flex items-center gap-2 border border-secondary-500 bg-secondary-50 px-3 py-2 text-xs font-semibold uppercase text-secondary-500 dark:border-neutral-700 dark:bg-secondary-900 dark:text-secondary-50 sm:right-6 sm:top-6">
+        <a class="hover:text-primary-600 dark:hover:text-primary-500" href="/">Grade</a>
+        <span class="text-neutral-500">/</span>
+        <button id="themeToggle" class="min-h-0 border-0 bg-transparent p-0 text-xs font-semibold uppercase text-secondary-500 hover:bg-transparent hover:text-primary-600 dark:text-secondary-50 dark:hover:text-primary-500" type="button" aria-pressed="false">
+          DARK
+        </button>
+      </nav>
+
+      <div class="pointer-events-none absolute right-0 top-16 z-0 h-3/5 w-3/5 overflow-hidden opacity-65 blur-3xl dark:opacity-45 md:right-8 md:top-8 md:w-1/2">
+        <img class="h-full w-full object-cover grayscale" src="/assets/agency-abstract.png" alt="" />
+      </div>
+
+      <div id="agencyRows" class="relative z-10 flex flex-1 flex-col"></div>
+
+      <aside class="fixed inset-x-0 bottom-0 z-40 flex h-16 border-t border-secondary-500 dark:border-neutral-700 md:h-20">
+        <div class="grid w-2/5 place-items-center border-r border-secondary-500 bg-secondary-50 text-secondary-900 dark:border-neutral-700 md:w-1/4">
+          <span id="tickerLabel" class="font-mono text-sm font-normal uppercase sm:text-base"></span>
+        </div>
+        <div class="flex min-w-0 flex-1 items-center overflow-hidden bg-secondary-500 px-4 text-secondary-50 dark:bg-secondary-500 sm:px-6">
+          <p id="tickerCopy" class="whitespace-nowrap font-display text-2xl font-light leading-none tracking-normal sm:text-4xl md:text-5xl"></p>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="/dashboard/dashboard.js"></script>
+  </body>
+</html>

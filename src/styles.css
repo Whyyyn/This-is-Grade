@@ -4,20 +4,34 @@
 
 :root {
   color-scheme: dark;
-  --bg: #111111;
-  --fg: #f4f2ec;
-  --line: color-mix(in srgb, var(--fg) 28%, transparent);
-  --line-strong: color-mix(in srgb, var(--fg) 62%, transparent);
-  --surface: color-mix(in srgb, var(--fg) 5%, transparent);
-  --surface-strong: color-mix(in srgb, var(--fg) 10%, transparent);
+  --bg: #050505;
+  --fg: #ffffff;
+  --accent: #9cff00;
+  --accent-strong: #7fd600;
+  --line: color-mix(in srgb, var(--fg) 22%, transparent);
+  --line-strong: color-mix(in srgb, var(--fg) 36%, transparent);
+  --surface: color-mix(in srgb, var(--fg) 10%, transparent);
+  --surface-strong: color-mix(in srgb, var(--fg) 16%, transparent);
+  --glass: color-mix(in srgb, #151515 54%, transparent);
+  --glass-strong: color-mix(in srgb, #151515 72%, transparent);
+  --glass-input: color-mix(in srgb, #050505 38%, transparent);
+  --shadow: 0 24px 80px color-mix(in srgb, #000000 34%, transparent);
   --title-font: "Century Gothic", "Avenir Next", "Segoe UI", sans-serif;
   --ui-font: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f2ec;
+  --bg: #f7f7f7;
   --fg: #111111;
+  --line: color-mix(in srgb, var(--fg) 16%, transparent);
+  --line-strong: color-mix(in srgb, var(--fg) 30%, transparent);
+  --surface: color-mix(in srgb, #ffffff 58%, transparent);
+  --surface-strong: color-mix(in srgb, #ffffff 72%, transparent);
+  --glass: color-mix(in srgb, #ffffff 56%, transparent);
+  --glass-strong: color-mix(in srgb, #ffffff 76%, transparent);
+  --glass-input: color-mix(in srgb, #ffffff 42%, transparent);
+  --shadow: 0 24px 80px color-mix(in srgb, #111111 14%, transparent);
 }
 
 * {
@@ -33,7 +47,10 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   color: var(--fg);
-  background: var(--bg);
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--bg) 72%, transparent), var(--bg) 58%),
+    url("/assets/agency-abstract.png") right -12vw top -10vh / min(72vw, 980px) auto no-repeat fixed,
+    var(--bg);
   font-family: var(--ui-font);
   font-size: 15px;
   line-height: 1.45;
@@ -62,8 +79,13 @@ button {
   justify-content: space-between;
   gap: 18px;
   min-height: 108px;
+  padding: 18px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--line-strong);
+  background: var(--glass);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
 }
 
 .topbar > div,
@@ -120,7 +142,10 @@ h2 {
 .panel {
   border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: var(--surface);
+  background: var(--glass);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(28px) saturate(155%);
+  -webkit-backdrop-filter: blur(28px) saturate(155%);
 }
 
 .panel-head {
@@ -141,7 +166,9 @@ h2 {
   padding: 4px 10px;
   border: 1px solid var(--line);
   color: color-mix(in srgb, var(--fg) 72%, transparent);
-  background: transparent;
+  background: var(--surface);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -152,7 +179,8 @@ h2 {
 .status[data-tone="ok"],
 .status[data-tone="bad"] {
   color: var(--fg);
-  border-color: var(--fg);
+  border-color: var(--line-strong);
+  background: var(--surface-strong);
 }
 
 .login-panel {
@@ -183,11 +211,13 @@ select {
   border-radius: 0;
   padding: 9px 10px;
   color: var(--fg);
-  background: var(--bg);
+  background: var(--glass-input);
   outline: none;
   font-family: var(--ui-font);
   font-size: 15px;
   line-height: 1.25;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 input::placeholder {
@@ -196,43 +226,47 @@ input::placeholder {
 
 input:focus,
 select:focus {
-  border-color: var(--fg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 button {
   min-height: 38px;
   border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: transparent;
+  background: color-mix(in srgb, var(--glass-input) 82%, transparent);
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
 button:hover {
-  color: var(--bg);
-  background: var(--fg);
-  border-color: var(--fg);
+  color: #050505;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .primary {
   width: 100%;
   min-height: 44px;
   margin-top: 4px;
-  color: var(--bg);
-  background: var(--fg);
+  color: var(--fg);
+  background: var(--glass-strong);
   font-size: 15px;
   font-weight: 700;
 }
 
 .primary:hover {
-  color: var(--fg);
-  background: transparent;
+  color: #050505;
+  background: var(--accent);
 }
 
 .ghost,
 .icon-button {
   color: var(--fg);
-  background: transparent;
+  background: var(--glass-input);
 }
 
 .ghost {
@@ -298,16 +332,29 @@ button:hover {
   padding: 4px 10px;
   color: var(--fg);
   border-color: var(--line);
+  background: var(--glass-input);
   font-size: 13px;
   overflow-wrap: anywhere;
   text-align: left;
   white-space: normal;
 }
 
+.subject-chip:hover {
+  color: #050505;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
 .subject-chip[data-active="true"] {
-  color: var(--bg);
-  border-color: var(--fg);
-  background: var(--fg);
+  color: var(--fg);
+  border-color: var(--line-strong);
+  background: var(--surface-strong);
+}
+
+.subject-chip[data-active="true"]:hover {
+  color: #050505;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .layout-actions {
@@ -326,8 +373,10 @@ button:hover {
   flex: 1 1 220px;
   min-height: 34px;
   border: 1px solid var(--line);
-  background: transparent;
+  background: var(--glass-input);
   padding: 8px 11px;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .layout-help summary {
@@ -360,8 +409,11 @@ button:hover {
   border: 1px solid var(--line);
   padding: 24px;
   color: color-mix(in srgb, var(--fg) 68%, transparent);
+  background: var(--glass-input);
   font-size: 15px;
   text-align: center;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .prediction-panel,
@@ -390,6 +442,9 @@ button:hover {
   margin-bottom: 14px;
   border: 1px solid var(--line-strong);
   border-right: 0;
+  background: var(--glass-input);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .detail-tab {
@@ -398,15 +453,27 @@ button:hover {
   border-right: 1px solid var(--line-strong);
   padding: 8px 10px;
   color: var(--fg);
+  background: transparent;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.detail-tab:hover {
+  color: #050505;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
 .detail-tab[data-active="true"] {
-  color: var(--bg);
-  background: var(--fg);
+  color: var(--fg);
+  background: var(--surface-strong);
+}
+
+.detail-tab[data-active="true"]:hover {
+  color: #050505;
+  background: var(--accent);
 }
 
 .predict-grid {
@@ -431,7 +498,9 @@ button:hover {
 .prediction-results div {
   border: 1px solid var(--line);
   padding: 14px 16px 12px;
-  background: transparent;
+  background: var(--glass-input);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .prediction-results span {
@@ -457,7 +526,9 @@ button:hover {
   max-height: 520px;
   overflow: auto;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--glass-input);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 table {
@@ -479,7 +550,9 @@ th {
   top: 0;
   z-index: 2;
   color: var(--fg);
-  background: var(--bg);
+  background: var(--glass-strong);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
   font-size: 13px;
   font-weight: 700;
 }
@@ -501,7 +574,7 @@ td {
 .total-row td {
   border-top: 2px solid var(--fg);
   border-bottom: 2px solid var(--fg);
-  background: var(--surface-strong);
+  background: var(--glass-strong);
   font-weight: 800;
 }
 
@@ -515,7 +588,9 @@ td {
   margin-top: 18px;
   border: 1px solid var(--line);
   padding: 16px;
-  background: var(--bg);
+  background: var(--glass-input);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .donut-layout {
@@ -539,7 +614,7 @@ td {
 .donut-segment:hover,
 .donut-segment:focus,
 .donut-segment[data-active="true"] {
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--fg) 48%, transparent));
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 56%, transparent));
   opacity: 1;
   stroke: var(--bg);
   stroke-width: 1.4px;
@@ -571,14 +646,21 @@ td {
   padding: 8px;
   text-align: left;
   border-color: var(--line);
+  background: var(--glass-input);
 }
 
 .legend-item:hover,
 .legend-item:focus,
 .legend-item[data-active="true"] {
+  color: #050505;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.legend-item[data-active="true"]:not(:hover):not(:focus) {
   color: var(--fg);
-  background: var(--surface);
-  border-color: var(--fg);
+  background: var(--surface-strong);
+  border-color: var(--line-strong);
 }
 
 .legend-swatch {
@@ -625,8 +707,10 @@ td {
   min-height: 240px;
   border: 1px solid var(--line);
   padding: 14px;
-  background: var(--bg);
+  background: var(--glass-input);
   overflow-x: auto;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .history-svg {
@@ -648,7 +732,7 @@ td {
 }
 
 .history-point {
-  stroke: var(--bg);
+  stroke: color-mix(in srgb, var(--bg) 80%, transparent);
   stroke-width: 1.5;
 }
 
@@ -662,8 +746,9 @@ td {
 }
 
 .danger:hover {
-  color: var(--bg);
-  background: var(--fg);
+  color: #050505;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .privacy-help {
@@ -677,7 +762,9 @@ td {
   display: grid;
   place-items: center;
   padding: 18px;
-  background: color-mix(in srgb, #000 72%, transparent);
+  background: color-mix(in srgb, #000 54%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .modal-backdrop[hidden] {
@@ -691,7 +778,10 @@ td {
   border: 1px solid var(--line-strong);
   padding: 20px;
   color: var(--fg);
-  background: var(--bg);
+  background: var(--glass-strong);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(30px) saturate(155%);
+  -webkit-backdrop-filter: blur(30px) saturate(155%);
 }
 
 .reveal-list {
@@ -706,6 +796,7 @@ td {
   align-items: start;
   border: 1px solid var(--line);
   padding: 12px;
+  background: var(--glass-input);
 }
 
 .reveal-item h3 {
@@ -718,6 +809,7 @@ td {
   border: 1px solid var(--line);
   padding: 4px 10px;
   color: var(--fg);
+  background: var(--surface);
   font-size: 13px;
   font-weight: 700;
 }
@@ -743,7 +835,7 @@ td {
 .course-details {
   border: 1px solid var(--line);
   padding: 10px 12px;
-  background: transparent;
+  background: var(--glass-input);
 }
 
 .course-details summary {
