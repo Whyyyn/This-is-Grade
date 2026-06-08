@@ -62,9 +62,9 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(115deg, color-mix(in srgb, var(--bg) 52%, transparent), var(--bg) 72%),
-    url("/assets/agency-abstract.png") right -10vw top -8vh / min(82vw, 1120px) auto no-repeat,
-    radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--fg) 10%, transparent), transparent 30%),
+    linear-gradient(115deg, color-mix(in srgb, var(--bg) 34%, transparent), var(--bg) 84%),
+    url("/assets/geometric-glass-bg.png") center top / cover no-repeat,
+    radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--fg) 12%, transparent), transparent 30%),
     var(--bg);
 }
 
@@ -529,12 +529,11 @@ button:hover {
 }
 
 .table-wrap {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .details-wrap {
-  max-height: 520px;
-  overflow: auto;
+  overflow: visible;
   border: 1px solid var(--line);
   background: var(--glass-input);
   backdrop-filter: blur(18px) saturate(140%);
@@ -556,8 +555,7 @@ td {
 }
 
 th {
-  position: sticky;
-  top: 0;
+  position: static;
   z-index: 2;
   color: var(--fg);
   background: var(--glass-strong);
@@ -951,10 +949,6 @@ td {
   .icon-button {
     width: 40px;
     height: 40px;
-  }
-
-  .details-wrap {
-    max-height: 520px;
   }
 
   .detail-tabs {
