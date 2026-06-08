@@ -310,7 +310,8 @@ function renderPicker() {
     button.type = 'button';
     button.className = 'subject-chip';
     button.dataset.active = state.selected.has(grade.subject);
-    button.textContent = `${state.selected.has(grade.subject) ? '展示' : '隐藏'} · ${grade.subject} ${roundCourseScore(grade.score)}`;
+    button.setAttribute('aria-pressed', state.selected.has(grade.subject) ? 'true' : 'false');
+    button.textContent = `${state.selected.has(grade.subject) ? '已选' : '选择'} · ${grade.subject} ${roundCourseScore(grade.score)}`;
     button.addEventListener('click', () => toggleSubject(grade.subject));
     els.subjectPicker.append(button);
   }
@@ -321,8 +322,8 @@ function toggleSubject(subject) {
     state.selected.delete(subject);
   } else {
     if (state.selected.size >= 4) {
-      const [first] = state.selected;
-      state.selected.delete(first);
+      setStatus('最多选择四科，先取消一科再选择新的', 'bad');
+      return;
     }
     state.selected.add(subject);
   }
