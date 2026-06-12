@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "ThisIsGradeFutura";
+  src:
+    local("Futura"),
+    local("Futura Medium"),
+    local("Futura-Medium"),
+    local("Futura Condensed Medium"),
+    local("Futura-CondensedMedium"),
+    local("Futura Condensed ExtraBold"),
+    local("Futura-CondensedExtraBold");
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ThisIsGradeFuturaTitle";
+  src:
+    local("Futura Bold"),
+    local("Futura-Bold"),
+    local("Futura Medium"),
+    local("Futura-Medium");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   --bg: #050505;
@@ -19,8 +46,9 @@
   --glass-glow: color-mix(in srgb, #ffffff 7%, transparent);
   --glass-edge: color-mix(in srgb, #ffffff 30%, transparent);
   --shadow: 0 28px 90px color-mix(in srgb, #000000 46%, transparent), inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 color-mix(in srgb, #000000 24%, transparent);
-  --title-font: "Century Gothic", "Avenir Next", "Segoe UI", sans-serif;
-  --ui-font: Futura, "Futura PT", "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
+  --scene-bg: linear-gradient(115deg, color-mix(in srgb, var(--bg) 6%, transparent), color-mix(in srgb, var(--bg) 72%, transparent) 84%), url("/assets/geometric-glass-bg.png") center top / cover no-repeat, radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--fg) 10%, transparent), transparent 32%), var(--bg);
+  --title-font: "ThisIsGradeFuturaTitle", "Futura Bold", "Futura-Bold", Futura, "Futura PT", "Century Gothic", "Avenir Next", sans-serif;
+  --ui-font: "ThisIsGradeFutura", Futura, "Futura PT", "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
 }
 
 :root[data-theme="light"] {
@@ -57,8 +85,9 @@ body {
   background: var(--bg);
   font-family: var(--ui-font);
   font-size: 15px;
+  font-weight: 500;
   line-height: 1.45;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.005em;
 }
 
 body::before {
@@ -67,11 +96,7 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    linear-gradient(115deg, color-mix(in srgb, var(--bg) 6%, transparent), color-mix(in srgb, var(--bg) 72%, transparent) 84%),
-    url("/assets/geometric-glass-bg.png") center top / cover no-repeat,
-    radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--fg) 10%, transparent), transparent 32%),
-    var(--bg);
+  background: var(--scene-bg);
 }
 
 :root[data-theme="light"] body::before {
@@ -132,17 +157,32 @@ p {
 }
 
 h1 {
-  color: var(--fg);
+  color: transparent;
   font-family: var(--title-font);
   font-size: clamp(44px, 7vw, 104px);
-  font-weight: 400;
+  font-weight: 700;
   line-height: 0.96;
+  letter-spacing: 0;
+  background: var(--scene-bg);
+  background-attachment: fixed;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 0 transparent;
+  paint-order: stroke fill;
+  text-shadow:
+    0 0 1px color-mix(in srgb, #ffffff 52%, transparent),
+    0 0 8px color-mix(in srgb, #ffffff 18%, transparent);
+  filter:
+    drop-shadow(0 1px 0 color-mix(in srgb, #ffffff 16%, transparent))
+    drop-shadow(0 10px 18px color-mix(in srgb, #000000 14%, transparent));
 }
 
 h1 span {
   margin-left: 4px;
-  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  color: transparent;
   font-size: 0.34em;
+  font-weight: 700;
 }
 
 h2 {
@@ -335,7 +375,7 @@ button:hover {
 .muted {
   min-height: 28px;
   margin: 8px 0 14px;
-  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  color: color-mix(in srgb, var(--fg) 78%, transparent);
   font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -463,6 +503,7 @@ button:hover {
 }
 
 .detail-tabs {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
@@ -472,36 +513,61 @@ button:hover {
   background: var(--glass-input);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
+  overflow: hidden;
+}
+
+.detail-tabs::before,
+.detail-tabs::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: calc(100% / var(--detail-count, 4));
+  transform: translateX(calc(var(--detail-index, 0) * 100%));
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), width 220ms ease;
+  pointer-events: none;
+}
+
+.detail-tabs::before {
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  background: var(--accent);
+}
+
+.detail-tabs::after {
+  bottom: 0;
+  z-index: 2;
+  height: 2px;
+  background: #050505;
 }
 
 .detail-tab {
+  position: relative;
+  z-index: 1;
   min-height: 44px;
   border: 0;
   border-right: 1px solid var(--line-strong);
   padding: 8px 10px;
   color: var(--fg);
-  background: transparent;
+  background-color: transparent;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 220ms ease, border-color 220ms ease;
 }
 
 .detail-tab:hover {
   color: #050505;
   border-color: var(--accent);
-  background: var(--accent);
 }
 
 .detail-tab[data-active="true"] {
-  color: var(--fg);
-  background: transparent;
-  box-shadow: inset 0 -2px 0 var(--fg);
+  color: #050505;
 }
 
 .detail-tab[data-active="true"]:hover {
   color: #050505;
-  background: var(--accent);
 }
 
 .predict-grid {
@@ -533,7 +599,7 @@ button:hover {
 
 .prediction-results span {
   display: block;
-  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  color: color-mix(in srgb, var(--fg) 78%, transparent);
   font-size: 13px;
   margin-bottom: 4px;
 }
@@ -585,7 +651,7 @@ th {
 
 td {
   color: var(--fg);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.35;
   vertical-align: top;
 }
@@ -673,6 +739,7 @@ td {
   text-align: left;
   border-color: var(--line);
   background: transparent;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .legend-item:hover,
@@ -681,13 +748,6 @@ td {
   color: #050505;
   background: var(--accent);
   border-color: var(--accent);
-}
-
-.legend-item[data-active="true"]:not(:hover):not(:focus) {
-  color: var(--fg);
-  border-color: var(--line-strong);
-  background: transparent;
-  box-shadow: inset 0 -2px 0 var(--fg);
 }
 
 .legend-swatch {
@@ -712,7 +772,7 @@ td {
 }
 
 .legend-text small {
-  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  color: color-mix(in srgb, currentColor 72%, transparent);
   font-size: 12px;
   line-height: 1.2;
 }
@@ -919,22 +979,35 @@ td {
   }
 
   .detail-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .detail-tabs::before,
+  .detail-tabs::after {
+    width: 100%;
+    height: calc(100% / var(--detail-count, 4));
+    transform: translateY(calc(var(--detail-index, 0) * 100%));
+  }
+
+  .detail-tabs::after {
+    top: 0;
+    bottom: auto;
+    height: calc(100% / var(--detail-count, 4));
+    background: linear-gradient(to bottom, transparent calc(100% - 2px), #050505 0);
+    transform: translateY(calc(var(--detail-index, 0) * 100%));
   }
 }
 
 @media (max-width: 560px) {
   body {
+    --scene-bg: linear-gradient(130deg, color-mix(in srgb, var(--bg) 4%, transparent), color-mix(in srgb, var(--bg) 78%, transparent) 88%), url("/assets/geometric-glass-bg.png") center top / auto 100% repeat-y, var(--bg);
     font-size: 17px;
     line-height: 1.5;
     overflow-x: hidden;
   }
 
   body::before {
-    background:
-      linear-gradient(130deg, color-mix(in srgb, var(--bg) 4%, transparent), color-mix(in srgb, var(--bg) 78%, transparent) 88%),
-      url("/assets/geometric-glass-bg.png") center top / auto 100% repeat-y,
-      var(--bg);
+    background: var(--scene-bg);
   }
 
   .shell {

@@ -368,17 +368,22 @@ function renderDetailTabs() {
   if (!els.detailTabs) return;
   els.detailTabs.innerHTML = '';
   const selectedGrades = getSelectedGrades();
+  els.detailTabs.style.setProperty('--detail-count', String(Math.max(selectedGrades.length, 1)));
   if (!selectedGrades.length) {
+    els.detailTabs.style.setProperty('--detail-index', '0');
     const empty = document.createElement('p');
     empty.className = 'muted inline-empty';
     empty.textContent = '左侧选择展示的科目后，这里会出现四个切换标签。';
     els.detailTabs.append(empty);
     return;
   }
-  for (const grade of selectedGrades) {
+  const activeIndex = Math.max(0, selectedGrades.findIndex((grade) => grade.subject === state.detailSubject));
+  els.detailTabs.style.setProperty('--detail-index', String(activeIndex));
+  for (const [index, grade] of selectedGrades.entries()) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'detail-tab';
+    button.dataset.index = String(index);
     button.dataset.active = grade.subject === state.detailSubject;
     button.textContent = grade.subject + ' · ' + roundCourseScore(grade.score);
     button.setAttribute('aria-pressed', grade.subject === state.detailSubject ? 'true' : 'false');
