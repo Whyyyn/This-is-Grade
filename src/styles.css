@@ -157,6 +157,7 @@ p {
 }
 
 h1 {
+  position: relative;
   color: transparent;
   font-family: var(--title-font);
   font-size: clamp(44px, 7vw, 104px);
@@ -178,7 +179,25 @@ h1 {
     drop-shadow(0 10px 18px color-mix(in srgb, #000000 14%, transparent));
 }
 
+h1::after {
+  content: "This is Grade";
+  position: absolute;
+  inset: 0 auto auto 0;
+  pointer-events: none;
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 0.85px color-mix(in srgb, #ffffff 38%, transparent);
+  opacity: 0.66;
+  mix-blend-mode: screen;
+  transform: translate(0.8px, 0.8px);
+  filter: blur(0.08px);
+}
+
 h1 span {
+  position: relative;
+  z-index: 1;
   margin-left: 4px;
   color: transparent;
   font-size: 0.34em;
