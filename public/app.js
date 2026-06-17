@@ -345,9 +345,21 @@ function ensureDetailSubject() {
 function setDetailSubject(subject) {
   if (state.detailSubject === subject) return;
   state.detailSubject = subject;
-  renderDetailTabs();
+  updateDetailTabSelection();
   renderTable();
   renderAssignmentChart();
+}
+
+function updateDetailTabSelection() {
+  if (!els.detailTabs) return;
+  const selectedGrades = getSelectedGrades();
+  const activeIndex = Math.max(0, selectedGrades.findIndex((grade) => grade.subject === state.detailSubject));
+  els.detailTabs.style.setProperty('--detail-index', String(activeIndex));
+  for (const button of els.detailTabs.querySelectorAll('.detail-tab')) {
+    const active = Number(button.dataset.index) === activeIndex;
+    button.dataset.active = String(active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  }
 }
 
 function renderAverage() {

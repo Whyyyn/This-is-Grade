@@ -120,6 +120,7 @@ button {
 }
 
 .topbar {
+  isolation: isolate;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -223,6 +224,7 @@ h2 {
 }
 
 .panel {
+  isolation: isolate;
   border: 1px solid var(--line-strong);
   border-radius: 0;
   background:
