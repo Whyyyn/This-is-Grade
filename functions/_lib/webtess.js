@@ -180,9 +180,46 @@ export function parseGradebookSummary(text) {
 }
 
 function parseAssignmentItems(html, legacyText = cleanHtml(html)) {
+  const delimitedItems = parseDelimitedAssignmentItems(html);
+  if (delimitedItems.length) return delimitedItems;
   const tableItems = parseAssignmentTable(html);
   if (tableItems.length) return tableItems;
   return parseLegacyAssignmentItems(legacyText);
+}
+
+function parseDelimitedAssignmentItems(text) {
+  const rows = String(text).split(/\r\n|\n|\r/);
+  const items = [];
+
+  for (const row of rows) {
+    const fields = row.split('\t');
+    if (fields[0]?.trim().toLowerCase() !== '<pubmark>') continue;
+
+    const description = cleanPublishedField(fields[9]);
+    const assignment = cleanPublishedField(fields[10]);
+    const itemWeight = parsePercent(fields[7]);
+    const scorePercent = parsePercent(fields[8]);
+    if ((!assignment && !description) || !Number.isFinite(itemWeight) || !Number.isFinite(scorePercent)) continue;
+
+    items.push({
+      id: cleanPublishedField(fields[1]) || String(items.length + 1),
+      categoryId: cleanPublishedField(fields[3]) || 'unknown',
+      category: assignment || description || '未命名作业',
+      title: assignment ? description : '',
+      earned: parseNumber(fields[4]),
+      possible: parseNumber(fields[11]),
+      itemWeight,
+      scorePercent,
+      contribution: roundTwo(itemWeight * scorePercent / 100)
+    });
+  }
+
+  return items;
+}
+
+function cleanPublishedField(value) {
+  const cleaned = cleanHtml(value || '');
+  return /^(?:description|\.\.\.)$/i.test(cleaned) ? '' : cleaned;
 }
 
 function parseAssignmentTable(html) {

@@ -485,7 +485,7 @@ function renderTable() {
   if (!grade) {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 6;
+    cell.colSpan = 5;
     cell.className = 'empty-detail';
     cell.textContent = state.grades.length ? '选择展示的四门课后，这里会显示对应小成绩。' : '抓取成绩后显示小成绩明细。';
     row.append(cell);
@@ -493,19 +493,8 @@ function renderTable() {
     return;
   }
 
-  const totalRow = document.createElement('tr');
-  totalRow.className = 'total-row';
-  appendCell(totalRow, grade.subject, 'subject-cell');
-  appendCell(totalRow, '总分');
-  appendCell(totalRow, '当前课程总成绩');
-  appendCell(totalRow, String(roundCourseScore(grade.score)), 'total-score');
-  appendCell(totalRow, roundHundredths(grade.score) + '%');
-  appendCell(totalRow, '100%');
-  els.gradeRows.append(totalRow);
-
   if (!grade.assignments.length) {
     const row = document.createElement('tr');
-    appendCell(row, '');
     appendCell(row, '小成绩');
     appendCell(row, '暂无小成绩明细');
     appendCell(row, '--');
@@ -517,7 +506,6 @@ function renderTable() {
 
   for (const item of grade.assignments) {
     const row = document.createElement('tr');
-    appendCell(row, '');
     appendCell(row, item.category);
     appendCell(row, item.title || '—');
     appendCell(row, formatPoints(item));

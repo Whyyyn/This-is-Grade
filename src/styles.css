@@ -678,26 +678,6 @@ td {
   vertical-align: top;
 }
 
-.subject-cell {
-  max-width: 190px;
-  color: var(--fg);
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-
-.total-row td {
-  border-top: 2px solid var(--fg);
-  border-bottom: 2px solid var(--fg);
-  background: var(--glass-strong);
-  font-weight: 800;
-}
-
-.total-score {
-  font-family: var(--title-font);
-  font-size: 30px;
-  line-height: 1;
-}
-
 .assignment-chart {
   margin-top: 18px;
   border: 1px solid var(--line);
@@ -973,25 +953,24 @@ td {
   min-width: 800px;
 }
 
-.grade-col-subject {
-  width: 14%;
-}
-
 .grade-col-assignment {
-  width: 26%;
+  width: 28%;
 }
 
 .grade-col-description {
-  width: 31%;
+  width: 35%;
 }
 
 .grade-col-score {
-  width: 11%;
+  width: 14%;
 }
 
-.grade-col-percent,
+.grade-col-percent {
+  width: 12%;
+}
+
 .grade-col-weight {
-  width: 9%;
+  width: 11%;
 }
 
 .empty-detail {
@@ -1456,15 +1435,6 @@ td {
 
   .details-wrap > table td::before {
     content: none;
-  }
-
-  .subject-cell {
-    max-width: none;
-  }
-
-  .total-row td {
-    border-top: 2px solid var(--fg);
-    border-bottom: 2px solid var(--fg);
   }
 
   .prediction-results strong {
