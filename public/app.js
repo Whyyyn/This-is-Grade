@@ -37,8 +37,15 @@ const els = {
   predictionScore: document.querySelector('#predictionScore'),
   predictedCourse: document.querySelector('#predictedCourse'),
   predictedAverage: document.querySelector('#predictedAverage'),
-  predictionDelta: document.querySelector('#predictionDelta')
+  predictionDelta: document.querySelector('#predictionDelta'),
+  changelogCard: document.querySelector('#changelogCard'),
+  changelogList: document.querySelector('#changelogList'),
+  changelogBuild: document.querySelector('#changelogBuild')
 };
+
+const CHANGELOG_API = 'https://api.github.com/repos/Whyyyn/This-is-Grade/commits?sha=main&per_page=100';
+const CHANGELOG_URL = 'https://github.com/Whyyyn/This-is-Grade/commits/main/';
+let changelogLoaded = false;
 
 applyTheme(loadTheme());
 
@@ -1138,6 +1145,70 @@ function normalizePasswordForHistory(password) {
   return String(password || '').trim();
 }
 
+async function loadChangelog() {
+  if (changelogLoaded || !els.changelogList) return;
+  changelogLoaded = true;
+  els.changelogList.replaceChildren(createChangelogMessage('正在读取 GitHub 历史…'));
+
+  try {
+    const response = await fetch(CHANGELOG_API, {
+      headers: { Accept: 'application/vnd.github+json' }
+    });
+    if (!response.ok) throw new Error('GitHub request failed');
+    const commits = await response.json();
+    if (!Array.isArray(commits) || !commits.length) throw new Error('No commits returned');
+
+    const fragment = document.createDocumentFragment();
+    for (const item of commits) fragment.append(createChangelogItem(item));
+    els.changelogList.replaceChildren(fragment);
+    if (els.changelogBuild) {
+      els.changelogBuild.firstChild.textContent = commits.length + ' commits · ' + String(commits[0].sha).slice(0, 7);
+    }
+  } catch {
+    const message = createChangelogMessage('');
+    const link = document.createElement('a');
+    link.href = CHANGELOG_URL;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = '无法加载记录，在 GitHub 查看完整历史';
+    message.append(link);
+    els.changelogList.replaceChildren(message);
+    changelogLoaded = false;
+  }
+}
+
+function createChangelogItem(item) {
+  const row = document.createElement('li');
+  const dateValue = item.commit?.author?.date || item.commit?.committer?.date || '';
+  const date = document.createElement('time');
+  date.dateTime = dateValue;
+  date.textContent = dateValue ? dateValue.slice(0, 10).replaceAll('-', '.') : 'Unknown';
+
+  const content = document.createElement('div');
+  const title = document.createElement('a');
+  title.className = 'changelog-title';
+  title.href = item.html_url || CHANGELOG_URL;
+  title.target = '_blank';
+  title.rel = 'noopener noreferrer';
+  title.textContent = String(item.commit?.message || 'Untitled commit').split('\n')[0];
+
+  const meta = document.createElement('p');
+  meta.className = 'changelog-meta';
+  const hash = document.createElement('code');
+  hash.textContent = String(item.sha || '').slice(0, 7);
+  meta.append(hash, document.createTextNode(' · ' + (item.commit?.author?.name || 'GitHub')));
+  content.append(title, meta);
+  row.append(date, content);
+  return row;
+}
+
+function createChangelogMessage(text) {
+  const row = document.createElement('li');
+  row.className = 'changelog-loading';
+  row.textContent = text;
+  return row;
+}
+
 els.password.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -1232,6 +1303,10 @@ els.revealCloseButton?.addEventListener('click', () => {
 els.revealAllButton?.addEventListener('click', () => {
   state.latestChanges.forEach((_, index) => state.revealedChanges.add(index));
   renderRevealList();
+});
+
+els.changelogCard?.addEventListener('toggle', () => {
+  if (els.changelogCard.open) loadChangelog();
 });
 
 setupHumanTranslations();

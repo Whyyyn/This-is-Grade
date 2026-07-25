@@ -196,6 +196,7 @@ function parseAssignmentTable(html) {
     if (!cells.length) continue;
 
     const normalized = cells.map((cell) => cell.toLowerCase().replace(/\s+/g, ' ').trim());
+    let rowColumns = columns;
     if (!columns) {
       const assignment = normalized.findIndex((cell) => cell === 'column');
       const description = normalized.findIndex((cell) => cell === 'description');
@@ -205,14 +206,16 @@ function parseAssignmentTable(html) {
       const percent = normalized.findIndex((cell) => cell === 'percent');
       if ([assignment, description, weight, earned, possible, percent].every((index) => index >= 0)) {
         columns = { assignment, description, weight, earned, possible, percent };
+        continue;
       }
-      continue;
+      rowColumns = inferAssignmentColumns(cells);
     }
+    if (!rowColumns) continue;
 
-    const assignment = cells[columns.assignment]?.trim() || '';
-    const description = cells[columns.description]?.trim() || '';
-    const itemWeight = parsePercent(cells[columns.weight]);
-    const scorePercent = parsePercent(cells[columns.percent]);
+    const assignment = cells[rowColumns.assignment]?.trim() || '';
+    const description = cells[rowColumns.description]?.trim() || '';
+    const itemWeight = parsePercent(cells[rowColumns.weight]);
+    const scorePercent = parsePercent(cells[rowColumns.percent]);
     if (!assignment || !Number.isFinite(itemWeight) || !Number.isFinite(scorePercent)) continue;
 
     const rowHtml = row[0];
@@ -221,8 +224,8 @@ function parseAssignmentTable(html) {
       categoryId: extractRowIdentifier(rowHtml, ['category', 'column', 'group']) || 'unknown',
       category: assignment,
       title: description,
-      earned: parseNumber(cells[columns.earned]),
-      possible: parseNumber(cells[columns.possible]),
+      earned: parseNumber(cells[rowColumns.earned]),
+      possible: parseNumber(cells[rowColumns.possible]),
       itemWeight,
       scorePercent,
       contribution: roundTwo(itemWeight * scorePercent / 100)
@@ -230,6 +233,28 @@ function parseAssignmentTable(html) {
   }
 
   return items;
+}
+
+function inferAssignmentColumns(cells) {
+  const percentIndexes = cells
+    .map((cell, index) => (/^-?\d+(?:\.\d+)?\s*%$/.test(cell.trim()) ? index : -1))
+    .filter((index) => index >= 0);
+  if (percentIndexes.length < 2) return null;
+
+  const percent = percentIndexes.at(-1);
+  const weight = percentIndexes.at(-2);
+  const inferred = {
+    assignment: weight - 2,
+    description: weight - 1,
+    weight,
+    earned: weight + 1,
+    possible: weight + 2,
+    percent
+  };
+  if (inferred.assignment < 0 || inferred.possible >= cells.length || inferred.percent <= inferred.possible) {
+    return null;
+  }
+  return inferred;
 }
 
 function parseLegacyAssignmentItems(text) {

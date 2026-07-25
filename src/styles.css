@@ -968,6 +968,32 @@ td {
   font-size: 13px;
 }
 
+.grade-table {
+  table-layout: fixed;
+  min-width: 800px;
+}
+
+.grade-col-subject {
+  width: 14%;
+}
+
+.grade-col-assignment {
+  width: 26%;
+}
+
+.grade-col-description {
+  width: 31%;
+}
+
+.grade-col-score {
+  width: 11%;
+}
+
+.grade-col-percent,
+.grade-col-weight {
+  width: 9%;
+}
+
 .empty-detail {
   margin-top: 10px;
   color: color-mix(in srgb, var(--fg) 68%, transparent);
@@ -1080,10 +1106,42 @@ td {
   line-height: 1.3;
 }
 
+.changelog-title {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+.changelog-title:hover,
+.changelog-title:focus-visible,
+.changelog-loading a:hover,
+.changelog-loading a:focus-visible {
+  color: var(--accent);
+}
+
 .changelog-list p {
   color: color-mix(in srgb, var(--fg) 74%, transparent);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.changelog-list code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.changelog-loading {
+  display: block !important;
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  font-size: 13px;
+}
+
+.changelog-loading a {
+  color: var(--fg);
 }
 
 @media (max-width: 980px) {

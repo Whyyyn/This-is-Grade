@@ -67,7 +67,15 @@
           </div>
           <div id="detailTabs" class="detail-tabs" aria-label="切换显示科目"></div>
           <div class="table-wrap details-wrap">
-            <table>
+            <table class="grade-table">
+              <colgroup>
+                <col class="grade-col-subject" />
+                <col class="grade-col-assignment" />
+                <col class="grade-col-description" />
+                <col class="grade-col-score" />
+                <col class="grade-col-percent" />
+                <col class="grade-col-weight" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>科目</th>
@@ -136,57 +144,16 @@
         </section>
       </section>
 
-      <details class="panel changelog-card">
+      <details id="changelogCard" class="panel changelog-card">
         <summary class="changelog-summary">
           <span>
             <strong>版本日志</strong>
-            <small>查看界面与功能更新历史</small>
+            <small>来自 GitHub main 分支的完整提交历史</small>
           </span>
-          <span class="changelog-build">Build 2026.07.26</span>
+          <span id="changelogBuild" class="changelog-build">GitHub history</span>
         </summary>
-        <ol class="changelog-list">
-          <li>
-            <time datetime="2026-07-26">2026.07.26</time>
-            <div>
-              <strong>成绩字段语义修正</strong>
-              <p>按照 WebTESS 原表格，将 Column 显示为“作业”、Description 显示为“描述”，并优化抓取映射与图表标签。</p>
-            </div>
-          </li>
-          <li>
-            <time datetime="2026-07-15">2026.07.15</time>
-            <div>
-              <strong>移动端横向布局</strong>
-              <p>恢复桌面式横排结构，收紧间距，并优化手机上的表格、预测和权重图。</p>
-            </div>
-          </li>
-          <li>
-            <time datetime="2026-06-18">2026.06.18</time>
-            <div>
-              <strong>交互稳定性</strong>
-              <p>修复毛玻璃卡片和科目切换偶发闪烁的问题。</p>
-            </div>
-          </li>
-          <li>
-            <time datetime="2026-06-15">2026.06.15</time>
-            <div>
-              <strong>科目明细与玻璃标题</strong>
-              <p>修复三科布局比例，完善滑动指示条和透明玻璃标题效果。</p>
-            </div>
-          </li>
-          <li>
-            <time datetime="2026-06-08">2026.06.08</time>
-            <div>
-              <strong>新版界面上线</strong>
-              <p>接入 Tailwind 构建流程，加入几何背景、毛玻璃卡片和霓虹绿交互系统。</p>
-            </div>
-          </li>
-          <li>
-            <time datetime="2026-06-06">2026.06.06</time>
-            <div>
-              <strong>成绩历史基础功能</strong>
-              <p>完善新成绩提示、加密历史记录和成绩变化查看流程。</p>
-            </div>
-          </li>
+        <ol id="changelogList" class="changelog-list" aria-live="polite">
+          <li class="changelog-loading">展开后加载 GitHub 提交记录。</li>
         </ol>
       </details>
     </main>
