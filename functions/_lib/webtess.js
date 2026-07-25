@@ -163,7 +163,7 @@ async function fetchCourseGrade(session, course) {
   };
 }
 
-function parseGradebookSummary(text) {
+export function parseGradebookSummary(text) {
   const cleaned = cleanHtml(text);
   const mainSpreadsheet = cleaned.match(/^\s*\S+\s+(.+?)\s+\d+\s+Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)/i);
   if (mainSpreadsheet) {
@@ -172,14 +172,67 @@ function parseGradebookSummary(text) {
       return {
         subject: mainSpreadsheet[1].trim(),
         score,
-        assignments: parseAssignmentItems(cleaned.slice(mainSpreadsheet.index + mainSpreadsheet[0].length))
+        assignments: parseAssignmentItems(text, cleaned.slice(mainSpreadsheet.index + mainSpreadsheet[0].length))
       };
     }
   }
   return { subject: '', score: parseGradebookScore(text), assignments: [] };
 }
 
-function parseAssignmentItems(text) {
+function parseAssignmentItems(html, legacyText = cleanHtml(html)) {
+  const tableItems = parseAssignmentTable(html);
+  if (tableItems.length) return tableItems;
+  return parseLegacyAssignmentItems(legacyText);
+}
+
+function parseAssignmentTable(html) {
+  const rows = [...String(html).matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/gi)];
+  let columns = null;
+  const items = [];
+
+  for (const row of rows) {
+    const cells = [...row[2].matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)]
+      .map((cell) => cleanHtml(cell[1]));
+    if (!cells.length) continue;
+
+    const normalized = cells.map((cell) => cell.toLowerCase().replace(/\s+/g, ' ').trim());
+    if (!columns) {
+      const assignment = normalized.findIndex((cell) => cell === 'column');
+      const description = normalized.findIndex((cell) => cell === 'description');
+      const weight = normalized.findIndex((cell) => cell.includes('overall') && cell.includes('value'));
+      const earned = normalized.findIndex((cell) => cell === 'mark');
+      const possible = normalized.findIndex((cell) => cell === 'out of');
+      const percent = normalized.findIndex((cell) => cell === 'percent');
+      if ([assignment, description, weight, earned, possible, percent].every((index) => index >= 0)) {
+        columns = { assignment, description, weight, earned, possible, percent };
+      }
+      continue;
+    }
+
+    const assignment = cells[columns.assignment]?.trim() || '';
+    const description = cells[columns.description]?.trim() || '';
+    const itemWeight = parsePercent(cells[columns.weight]);
+    const scorePercent = parsePercent(cells[columns.percent]);
+    if (!assignment || !Number.isFinite(itemWeight) || !Number.isFinite(scorePercent)) continue;
+
+    const rowHtml = row[0];
+    items.push({
+      id: extractRowIdentifier(rowHtml, ['assignment', 'item', 'mark']) || String(items.length + 1),
+      categoryId: extractRowIdentifier(rowHtml, ['category', 'column', 'group']) || 'unknown',
+      category: assignment,
+      title: description,
+      earned: parseNumber(cells[columns.earned]),
+      possible: parseNumber(cells[columns.possible]),
+      itemWeight,
+      scorePercent,
+      contribution: roundTwo(itemWeight * scorePercent / 100)
+    });
+  }
+
+  return items;
+}
+
+function parseLegacyAssignmentItems(text) {
   const itemPattern = /(\d+)\s+(\d+)\s+(\d+)\s+(-?\d+(?:\.\d+)?)\s+(\d+)\s+(\d+)\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%\s+/g;
   const matches = [...text.matchAll(itemPattern)];
   return matches.map((match, index) => {
@@ -192,8 +245,8 @@ function parseAssignmentItems(text) {
     return {
       id: match[1],
       categoryId,
-      category: titleInfo.category || '未分类',
-      title: titleInfo.title || 'Item ' + (index + 1),
+      category: titleInfo.assignment || '未命名作业',
+      title: titleInfo.description,
       earned: Number(match[4]),
       possible: titleInfo.possible,
       itemWeight,
@@ -207,23 +260,30 @@ function parseAssignmentTitle(text) {
   const parts = text.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
   let possible = null;
   if (parts.length && /^-?\d+(?:\.\d+)?$/.test(parts.at(-1))) possible = Number(parts.pop());
-  const title = parts.join(' ').trim();
-  return { title, possible, category: inferCategory(title) };
+  return {
+    assignment: parts.join(' ').trim(),
+    description: '',
+    possible
+  };
 }
 
-function inferCategory(title) {
-  const normalized = title.toLowerCase();
-  const categories = [
-    ['Test', /\b(test|exam|assessment|unit)\b/i],
-    ['Quiz', /\bquiz\b/i],
-    ['Homework', /\b(homework|hw|journal|worksheet|reading assignment|classnote)\b/i],
-    ['Classwork', /\b(class work|classwork|notes|participation|outline|understand)\b/i],
-    ['Project', /\b(project|presentation|video|poster|program|psa)\b/i],
-    ['Writing', /\b(essay|paragraph|poem|writing|composition|reading comprehension)\b/i],
-    ['Lab', /\b(lab|experiment)\b/i]
-  ];
-  const found = categories.find(([, pattern]) => pattern.test(normalized));
-  return found ? found[0] : '';
+function extractRowIdentifier(html, names) {
+  for (const name of names) {
+    const pattern = new RegExp(`(?:data-)?${name}(?:-?id)?=["']?([\\w-]+)`, 'i');
+    const match = String(html).match(pattern);
+    if (match) return match[1];
+  }
+  return '';
+}
+
+function parsePercent(value) {
+  const match = String(value || '').match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function parseNumber(value) {
+  const text = String(value || '').replace(/,/g, '').trim();
+  return /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null;
 }
 
 function parseGradebookScore(text) {

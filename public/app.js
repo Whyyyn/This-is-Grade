@@ -143,43 +143,26 @@ function normalizeSubjectKey(subject) {
 
 
 function normalizeAssignments(assignments) {
-  return assignments.map((item, index) => ({
-    id: String(item.id || index + 1),
-    categoryId: String(item.categoryId || 'unknown'),
-    category: normalizeCategory(item.category, item.title),
-    title: String(item.title || 'Item ' + (index + 1)).trim(),
-    earned: numericOrNull(item.earned),
-    possible: numericOrNull(item.possible),
-    itemWeight: Number(item.itemWeight) || 0,
-    scorePercent: Number(item.scorePercent),
-    contribution: Number(item.contribution) || 0
-  })).filter((item) => Number.isFinite(item.scorePercent));
+  return assignments.map((item, index) => {
+    const sourceAssignment = String(item.category || '').trim();
+    const sourceDescription = String(item.title || '').trim();
+    return {
+      id: String(item.id || index + 1),
+      categoryId: String(item.categoryId || 'unknown'),
+      category: sourceAssignment || sourceDescription || '未命名作业',
+      title: sourceAssignment ? sourceDescription : '',
+      earned: numericOrNull(item.earned),
+      possible: numericOrNull(item.possible),
+      itemWeight: Number(item.itemWeight) || 0,
+      scorePercent: Number(item.scorePercent),
+      contribution: Number(item.contribution) || 0
+    };
+  }).filter((item) => Number.isFinite(item.scorePercent));
 }
 
 function numericOrNull(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
-}
-
-function normalizeCategory(category, title = '') {
-  const text = String(category || '').trim();
-  if (!text || /^column\s*\d+$/i.test(text)) return inferCategoryFromTitle(title) || '未分类';
-  return text;
-}
-
-function inferCategoryFromTitle(title) {
-  const normalized = String(title || '').toLowerCase();
-  const categories = [
-    ['Test', /\b(test|exam|assessment|unit)\b/i],
-    ['Quiz', /\bquiz\b/i],
-    ['Homework', /\b(homework|hw|journal|worksheet|reading assignment|classnote)\b/i],
-    ['Classwork', /\b(class work|classwork|notes|participation|outline|understand)\b/i],
-    ['Project', /\b(project|presentation|video|poster|program|psa)\b/i],
-    ['Writing', /\b(essay|paragraph|poem|writing|composition|reading comprehension)\b/i],
-    ['Lab', /\b(lab|experiment)\b/i]
-  ];
-  const found = categories.find(([, pattern]) => pattern.test(normalized));
-  return found ? found[0] : '';
 }
 
 function loadUrlPinnedSubjects() {
@@ -441,7 +424,7 @@ function renderPrediction() {
   if (!grade || !prediction) {
     els.predictedCourse.textContent = '--';
     els.predictedAverage.textContent = '--';
-    els.predictionDelta.textContent = '暂无可预测栏目';
+    els.predictionDelta.textContent = '暂无可预测作业';
     return;
   }
   els.predictedCourse.textContent = String(roundCourseScore(prediction.score));
@@ -529,7 +512,7 @@ function renderTable() {
     const row = document.createElement('tr');
     appendCell(row, '');
     appendCell(row, item.category);
-    appendCell(row, item.title);
+    appendCell(row, item.title || '—');
     appendCell(row, formatPoints(item));
     appendCell(row, roundHundredths(item.scorePercent) + '%');
     appendCell(row, roundHundredths(item.itemWeight) + '%');
@@ -561,12 +544,12 @@ function renderAssignmentDetails(grade) {
   tableWrap.className = 'table-wrap nested';
   const table = document.createElement('table');
   table.className = 'assignment-table';
-  table.innerHTML = '<thead><tr><th>栏目</th><th>项目</th><th>得分</th><th>百分比</th><th>权重</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>作业</th><th>描述</th><th>得分</th><th>百分比</th><th>权重</th></tr></thead>';
   const body = document.createElement('tbody');
   for (const item of grade.assignments) {
     const row = document.createElement('tr');
     appendCell(row, item.category);
-    appendCell(row, item.title);
+    appendCell(row, item.title || '—');
     appendCell(row, formatPoints(item));
     appendCell(row, roundHundredths(item.scorePercent) + '%');
     appendCell(row, roundHundredths(item.itemWeight) + '%');
@@ -603,7 +586,8 @@ function renderAssignmentChart() {
   const detail = document.createElement('p');
   detail.className = 'chart-detail muted';
   const showItemDetail = (item) => {
-    detail.textContent = item.title + ' | weight ' + roundHundredths(item.displayWeight) + '% | score ' + roundHundredths(item.scorePercent) + '% | ' + formatPoints(item.assignment);
+    const description = item.description ? ' · ' + item.description : '';
+    detail.textContent = item.title + description + ' | weight ' + roundHundredths(item.displayWeight) + '% | score ' + roundHundredths(item.scorePercent) + '% | ' + formatPoints(item.assignment);
     for (const node of chart.querySelectorAll('[data-chart-item]')) {
       node.dataset.active = node.dataset.chartItem === item.id ? 'true' : 'false';
     }
@@ -618,7 +602,7 @@ function renderAssignmentChart() {
     row.className = 'legend-item';
     row.dataset.chartItem = item.id;
     row.dataset.active = 'false';
-    row.title = item.title + ' · 占比 ' + roundHundredths(item.displayWeight) + '% · 实得 ' + roundHundredths(item.scorePercent) + '%';
+    row.title = item.title + (item.description ? ' · ' + item.description : '') + ' · 占比 ' + roundHundredths(item.displayWeight) + '% · 实得 ' + roundHundredths(item.scorePercent) + '%';
     row.innerHTML =
       '<span class="legend-swatch" style="--swatch:' + item.color + '"></span>' +
       '<span class="legend-text"><strong>' + escapeHtml(item.title) + '</strong><small>' +
@@ -653,7 +637,8 @@ function buildChartItems(assignments) {
     return {
       id: 'assignment-' + index,
       assignment: item,
-      title: item.title,
+      title: item.category || item.title || '未命名作业',
+      description: item.title || '',
       displayWeight: hasWeights ? weight : 100 / assignments.length,
       share: weight / total,
       scorePercent: Number(item.scorePercent) || 0,
@@ -930,8 +915,8 @@ function sanitizeSnapshot(snapshot) {
       subject: String(grade.subject || '').trim(),
       score: Number(grade.score),
       assignments: Array.isArray(grade.assignments) ? grade.assignments.map((item) => ({
-        category: String(item.category || '').trim() || '未分类',
-        title: String(item.title || '').trim() || 'Item',
+        category: String(item.category || '').trim() || String(item.title || '').trim() || '未命名作业',
+        title: String(item.title || '').trim(),
         earned: numericOrNull(item.earned),
         possible: numericOrNull(item.possible),
         scorePercent: Number(item.scorePercent),
@@ -955,12 +940,12 @@ function compareSnapshots(oldSnapshot, newSnapshot) {
     for (const item of newCourse.assignments) {
       const oldItem = oldAssignments.get(assignmentKey(item));
       if (!oldItem) {
-        changes.push(createChange('new-assignment', newCourse.subject, item.title, oldCourse, newCourse, null, item, oldAverage, newAverage));
+        changes.push(createChange('new-assignment', newCourse.subject, item.category || item.title, oldCourse, newCourse, null, item, oldAverage, newAverage));
       }
     }
     for (const item of oldCourse.assignments) {
       if (!newAssignments.has(assignmentKey(item))) {
-        changes.push(createChange('deleted-assignment', newCourse.subject, item.title, oldCourse, newCourse, item, null, oldAverage, newAverage));
+        changes.push(createChange('deleted-assignment', newCourse.subject, item.category || item.title, oldCourse, newCourse, item, null, oldAverage, newAverage));
       }
     }
   }
