@@ -296,12 +296,14 @@ function renderPicker() {
     return;
   }
   for (const grade of state.grades) {
+    const selected = state.selected.has(grade.subject);
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'subject-chip';
-    button.dataset.active = state.selected.has(grade.subject);
-    button.setAttribute('aria-pressed', state.selected.has(grade.subject) ? 'true' : 'false');
-    button.textContent = `${state.selected.has(grade.subject) ? '已选' : '选择'} · ${grade.subject} ${roundCourseScore(grade.score)}`;
+    button.dataset.active = selected;
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    button.setAttribute('aria-label', `${selected ? '已选' : '未选'} · ${grade.subject} ${roundCourseScore(grade.score)}`);
+    button.textContent = `${grade.subject} ${roundCourseScore(grade.score)}`;
     button.addEventListener('click', () => toggleSubject(grade.subject));
     els.subjectPicker.append(button);
   }
@@ -406,6 +408,7 @@ function renderPredictionControls() {
     option.textContent = grade.subject;
     els.predictionCourse.append(option);
   }
+  els.predictionCourse.disabled = !state.grades.length;
   state.predictionSubject = state.grades.some((grade) => grade.subject === currentSubject) ? currentSubject : state.grades[0]?.subject || '';
   els.predictionCourse.value = state.predictionSubject;
 
@@ -419,6 +422,7 @@ function renderPredictionControls() {
     option.textContent = category.name + ' (' + roundHundredths(category.weight) + '%)';
     els.predictionCategory.append(option);
   }
+  els.predictionCategory.disabled = !categories.length;
   state.predictionCategory = categories.some((category) => category.key === currentCategory) ? currentCategory : categories[0]?.key || '';
   els.predictionCategory.value = state.predictionCategory;
 }
