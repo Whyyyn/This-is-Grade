@@ -2435,3 +2435,316 @@ td {
     font-size: 12px;
   }
 }
+
+/* Mobile dashboard: preserve information density without horizontal page UI. */
+@media (max-width: 980px) {
+  .workspace,
+  :root[data-theme="hacker"] .workspace {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "login average"
+      "details details"
+      "history history"
+      "prediction prediction";
+    gap: 10px;
+  }
+}
+
+@media (max-width: 560px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .shell,
+  :root[data-theme="hacker"] .shell {
+    width: auto;
+    margin-right: 6px;
+    margin-left: 6px;
+    padding-top: 6px;
+    padding-bottom: 24px;
+  }
+
+  .workspace,
+  :root[data-theme="hacker"] .workspace {
+    gap: 6px;
+    align-items: stretch;
+  }
+
+  .topbar,
+  :root[data-theme="hacker"] .topbar {
+    align-items: center;
+    padding: 8px;
+    gap: 8px;
+    margin-bottom: 7px;
+  }
+
+  h1 {
+    font-size: clamp(28px, 8.5vw, 38px);
+    white-space: nowrap;
+  }
+
+  h1 span {
+    display: inline;
+    margin-left: 2px;
+  }
+
+  .login-panel,
+  .average-panel,
+  .prediction-panel,
+  .history-panel,
+  .table-panel {
+    padding: 8px;
+  }
+
+  .average-panel {
+    align-self: start;
+    min-height: 0;
+  }
+
+  .table-panel {
+    min-height: 0;
+  }
+
+  .panel-head {
+    gap: 4px;
+    margin-bottom: 7px;
+  }
+
+  :root[data-theme="webtess"] .panel-head {
+    margin: -8px -8px 7px;
+    padding: 6px 7px;
+  }
+
+  h2 {
+    font-size: 14px;
+  }
+
+  .status {
+    min-height: 22px;
+    max-width: 90px;
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  label {
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+
+  label span,
+  .predict-grid label span {
+    font-size: 10px;
+  }
+
+  input,
+  select {
+    min-height: 34px;
+    padding: 6px;
+    font-size: 12px;
+  }
+
+  button {
+    min-height: 36px;
+    font-size: 12px;
+  }
+
+  .primary {
+    min-height: 36px;
+    font-size: 12px;
+  }
+
+  .compact {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .icon-button {
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+  }
+
+  .average-value {
+    margin: 4px 0;
+    font-size: clamp(46px, 15vw, 64px);
+  }
+
+  .muted,
+  .layout-help p,
+  .legend-text small,
+  .empty-detail {
+    min-height: 0;
+    margin: 4px 0 7px;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .subject-picker {
+    gap: 4px;
+  }
+
+  .subject-chip {
+    flex: 1 1 100%;
+    min-height: 28px;
+    padding: 3px 5px;
+    font-size: 10px;
+  }
+
+  .layout-actions {
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .layout-actions .compact {
+    min-height: 28px;
+  }
+
+  .layout-help {
+    flex: 1 1 100%;
+    min-height: 28px;
+    padding: 5px 7px;
+  }
+
+  .detail-tabs {
+    margin-bottom: 6px;
+  }
+
+  .detail-tab {
+    min-height: 32px;
+    padding: 4px 3px;
+    font-size: 9px;
+  }
+
+  .details-wrap,
+  .nested {
+    overflow: visible;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: auto;
+  }
+
+  .details-wrap > table,
+  .assignment-table,
+  :root[data-theme="hacker"] table {
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .grade-col-assignment {
+    width: 27%;
+  }
+
+  .grade-col-description {
+    width: 31%;
+  }
+
+  .grade-col-score {
+    width: 17%;
+  }
+
+  .grade-col-percent {
+    width: 14%;
+  }
+
+  .grade-col-weight {
+    width: 11%;
+  }
+
+  .details-wrap > table th,
+  .details-wrap > table td,
+  .assignment-table th,
+  .assignment-table td {
+    width: auto;
+    min-width: 0;
+    padding: 5px 3px;
+    font-size: 9px;
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .assignment-chart {
+    margin-top: 7px;
+    padding: 7px;
+  }
+
+  .donut-layout,
+  :root[data-theme="hacker"] .donut-layout {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 7px;
+    align-items: start;
+  }
+
+  .donut,
+  :root[data-theme="hacker"] .donut {
+    width: 104px;
+    align-self: start;
+  }
+
+  .donut-legend {
+    grid-template-columns: 1fr;
+    gap: 3px;
+    max-height: 154px;
+    padding-right: 2px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .legend-item {
+    grid-template-columns: 10px minmax(0, 1fr);
+    gap: 5px;
+    min-height: 30px;
+    padding: 4px;
+  }
+
+  .legend-swatch {
+    width: 10px;
+    height: 10px;
+    margin-top: 2px;
+  }
+
+  .legend-text {
+    gap: 1px;
+  }
+
+  .legend-text strong,
+  .legend-text small {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  .chart-detail {
+    margin: 0;
+    padding-top: 5px;
+    font-size: 10px;
+  }
+
+  .predict-grid {
+    gap: 4px;
+  }
+
+  .predict-grid input,
+  .predict-grid select {
+    min-height: 38px;
+    padding: 6px 5px;
+    font-size: 11px;
+  }
+
+  .prediction-results strong {
+    font-size: 34px;
+  }
+
+  .history-chart {
+    min-height: 220px;
+    padding: 8px;
+  }
+}
