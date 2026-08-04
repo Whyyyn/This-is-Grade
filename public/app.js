@@ -21,7 +21,10 @@ const els = {
   gradeRows: document.querySelector('#gradeRows'),
   assignmentChart: document.querySelector('#assignmentChart'),
   refreshButton: document.querySelector('#refreshButton'),
-  themeToggleButton: document.querySelector('#themeToggleButton'),
+  settingsButton: document.querySelector('#settingsButton'),
+  settingsModal: document.querySelector('#settingsModal'),
+  settingsCloseButton: document.querySelector('#settingsCloseButton'),
+  themeOptions: [...document.querySelectorAll('input[name="theme"]')],
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   historyStatus: document.querySelector('#historyStatus'),
@@ -47,7 +50,7 @@ const CHANGELOG_API = 'https://api.github.com/repos/Whyyyn/This-is-Grade/commits
 const CHANGELOG_URL = 'https://github.com/Whyyyn/This-is-Grade/commits/main/';
 let changelogLoaded = false;
 
-applyTheme(loadTheme());
+applyTheme(loadTheme(), false);
 
 function roundTenths(value) {
   return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
@@ -76,38 +79,49 @@ function setStatus(text, tone = '') {
 
 function loadTheme() {
   const fromUrl = new URLSearchParams(window.location.search).get('theme');
-  if (fromUrl === 'light' || fromUrl === 'dark') return fromUrl;
+  if (isThemeChoice(fromUrl)) return fromUrl;
   try {
     const saved = localStorage.getItem('grade-theme');
-    if (saved === 'light' || saved === 'dark') return saved;
+    if (isThemeChoice(saved)) return saved;
   } catch {
     // Ignore storage failures in strict privacy modes.
   }
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return 'system';
 }
 
 function applyTheme(theme, writeUrl = true) {
-  const nextTheme = theme === 'light' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = nextTheme;
-  if (els.themeToggleButton) {
-    els.themeToggleButton.querySelector('span').textContent = nextTheme === 'light' ? '☾' : '☀';
-    els.themeToggleButton.title = nextTheme === 'light' ? '切换到暗色主题' : '切换到亮色主题';
-    els.themeToggleButton.setAttribute('aria-label', els.themeToggleButton.title);
-  }
+  const nextChoice = isThemeChoice(theme) ? theme : 'system';
+  const resolvedTheme = nextChoice === 'system'
+    ? (window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+    : nextChoice;
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.themeChoice = nextChoice;
+  for (const option of els.themeOptions) option.checked = option.value === nextChoice;
   try {
-    localStorage.setItem('grade-theme', nextTheme);
+    localStorage.setItem('grade-theme', nextChoice);
   } catch {
     // Ignore storage failures in strict privacy modes.
   }
   if (!writeUrl) return;
   const next = new URL(window.location.href);
-  next.searchParams.set('theme', nextTheme);
+  next.searchParams.set('theme', nextChoice);
   window.history.replaceState({}, '', next);
 }
 
-function toggleTheme() {
-  const current = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-  applyTheme(current === 'light' ? 'dark' : 'light');
+function isThemeChoice(value) {
+  return ['system', 'light', 'dark', 'webtess', 'hacker'].includes(value);
+}
+
+function openSettings() {
+  if (!els.settingsModal) return;
+  els.settingsModal.hidden = false;
+  els.settingsCloseButton?.focus();
+}
+
+function closeSettings() {
+  if (!els.settingsModal) return;
+  els.settingsModal.hidden = true;
+  els.settingsButton?.focus();
 }
 
 function updateGrades(grades) {
@@ -1250,7 +1264,22 @@ els.predictionCategory?.addEventListener('change', () => {
 });
 els.predictionScore?.addEventListener('input', renderPrediction);
 els.copyLayoutButton?.addEventListener('click', copyLayoutLink);
-els.themeToggleButton?.addEventListener('click', toggleTheme);
+els.settingsButton?.addEventListener('click', openSettings);
+els.settingsCloseButton?.addEventListener('click', closeSettings);
+els.settingsModal?.addEventListener('click', (event) => {
+  if (event.target === els.settingsModal) closeSettings();
+});
+for (const option of els.themeOptions) {
+  option.addEventListener('change', () => {
+    if (option.checked) applyTheme(option.value);
+  });
+}
+window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+  if (document.documentElement.dataset.themeChoice === 'system') applyTheme('system', false);
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !els.settingsModal?.hidden) closeSettings();
+});
 els.refreshButton.addEventListener('click', () => {
   if (els.email.value.trim() && els.password.value) {
     els.form.requestSubmit();

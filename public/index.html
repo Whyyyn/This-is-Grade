@@ -11,10 +11,14 @@
       <section class="topbar">
         <div>
           <h1>This is Grade<span>.pages.dev</span></h1>
+          <pre class="hacker-banner" aria-hidden="true">+--------------------------------------+
+| THIS_IS_GRADE :: GREEN TERMINAL      |
+| STATUS: ONLINE  /  ACCESS: GRANTED   |
++--------------------------------------+</pre>
         </div>
         <div class="top-actions">
-          <button id="themeToggleButton" class="icon-button" type="button" title="切换亮暗主题" aria-label="切换亮暗主题">
-            <span>☾</span>
+          <button id="settingsButton" class="icon-button" type="button" title="外观设置" aria-label="打开外观设置" aria-haspopup="dialog">
+            <span>⚙</span>
           </button>
           <button id="refreshButton" class="icon-button" title="重新抓取成绩" aria-label="重新抓取成绩">
             <span>↻</span>
@@ -155,6 +159,49 @@
         </ol>
       </details>
     </main>
+
+    <div id="settingsModal" class="modal-backdrop" hidden>
+      <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="settings-head">
+          <div>
+            <p class="settings-kicker">SETTINGS</p>
+            <h2 id="settingsTitle">外观设置</h2>
+          </div>
+          <button id="settingsCloseButton" class="icon-button" type="button" aria-label="关闭设置"><span>×</span></button>
+        </div>
+        <fieldset class="theme-fieldset">
+          <legend>主题</legend>
+          <div class="theme-options">
+            <label class="theme-option" data-theme-preview="system">
+              <input type="radio" name="theme" value="system" />
+              <span class="theme-swatch" aria-hidden="true"></span>
+              <span class="theme-copy"><strong>跟随系统</strong><small>自动匹配设备的亮色或暗色外观</small></span>
+            </label>
+            <label class="theme-option" data-theme-preview="light">
+              <input type="radio" name="theme" value="light" />
+              <span class="theme-swatch" aria-hidden="true"></span>
+              <span class="theme-copy"><strong>亮色</strong><small>原有的浅色玻璃主题</small></span>
+            </label>
+            <label class="theme-option" data-theme-preview="dark">
+              <input type="radio" name="theme" value="dark" />
+              <span class="theme-swatch" aria-hidden="true"></span>
+              <span class="theme-copy"><strong>暗色</strong><small>原有的深色玻璃主题</small></span>
+            </label>
+            <label class="theme-option" data-theme-preview="webtess">
+              <input type="radio" name="theme" value="webtess" />
+              <span class="theme-swatch" aria-hidden="true"></span>
+              <span class="theme-copy"><strong>WebTESS 经典</strong><small>天空背景、成绩簿配色和复古系统控件</small></span>
+            </label>
+            <label class="theme-option" data-theme-preview="hacker">
+              <input type="radio" name="theme" value="hacker" />
+              <span class="theme-swatch" aria-hidden="true"></span>
+              <span class="theme-copy"><strong>嘿客</strong><small>黑绿终端、ASCII 装饰和紧凑排版</small></span>
+            </label>
+          </div>
+        </fieldset>
+        <p class="settings-note">选择后立即应用，并保存在当前浏览器中。</p>
+      </section>
+    </div>
 
     <div id="revealModal" class="modal-backdrop" hidden>
       <section class="reveal-modal" role="dialog" aria-modal="true" aria-labelledby="revealTitle">
