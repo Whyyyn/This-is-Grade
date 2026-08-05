@@ -284,7 +284,8 @@ h2 {
   grid-template-areas:
     "login average"
     "details details"
-    "history prediction";
+    "history history"
+    "prediction prediction";
   gap: 18px;
   align-items: start;
 }
@@ -875,42 +876,214 @@ td {
   margin: 0;
 }
 
+.history-market-head {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  margin: 14px 0 10px;
+}
+
+.history-subject-field {
+  min-width: 0;
+  margin: 0;
+}
+
+.history-subject-field select {
+  min-height: 38px;
+}
+
+.history-summary {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 10px;
+  align-items: baseline;
+  min-width: 154px;
+  padding: 7px 10px;
+  border-left: 3px solid var(--history-line-color, var(--accent));
+  background: var(--surface);
+  text-align: right;
+}
+
+.history-summary[hidden] {
+  display: none;
+}
+
+.history-summary strong {
+  font-family: var(--title-font);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.history-summary span {
+  color: var(--history-line-color, var(--accent));
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.history-summary small {
+  grid-column: 1 / -1;
+  color: color-mix(in srgb, var(--fg) 64%, transparent);
+  font-size: 10px;
+}
+
+.history-summary[data-tone="gain"] {
+  --history-line-color: #22c55e;
+}
+
+.history-summary[data-tone="loss"] {
+  --history-line-color: #f05d6f;
+}
+
 .history-chart {
-  min-height: 240px;
+  --history-line-color: var(--accent);
+  position: relative;
+  min-height: 310px;
   border: 1px solid var(--line);
-  padding: 14px;
+  padding: 10px;
+  color: var(--history-line-color);
   background: var(--glass-input);
   overflow-x: auto;
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
+.history-chart[data-tone="gain"] {
+  --history-line-color: #22c55e;
+}
+
+.history-chart[data-tone="loss"] {
+  --history-line-color: #f05d6f;
+}
+
 .history-svg {
   display: block;
   width: 100%;
   min-width: 720px;
-  height: 260px;
+  height: 310px;
+  overflow: visible;
 }
 
-.history-axis,
 .history-grid {
   stroke: var(--line);
   stroke-width: 1;
+  stroke-dasharray: 3 5;
 }
 
 .history-line {
   fill: none;
-  stroke-width: 2.4;
+  stroke: var(--history-line-color);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--history-line-color) 38%, transparent));
+}
+
+.history-area {
+  fill: url(#historyAreaGradient);
+  color: var(--history-line-color);
+}
+
+.history-event-target {
+  cursor: pointer;
+  outline: none;
+}
+
+.history-event-hitbox {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.history-event-line {
+  stroke: color-mix(in srgb, var(--fg) 24%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 5;
+  pointer-events: none;
+  transition: stroke 120ms ease, stroke-width 120ms ease, opacity 120ms ease;
+}
+
+.history-event-target:hover .history-event-line,
+.history-event-target:focus .history-event-line {
+  stroke: var(--history-line-color);
+  stroke-width: 1.5;
+  stroke-dasharray: none;
 }
 
 .history-point {
+  fill: var(--history-line-color);
   stroke: color-mix(in srgb, var(--bg) 80%, transparent);
-  stroke-width: 1.5;
+  stroke-width: 2;
+  cursor: pointer;
+  outline: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: r 120ms ease, filter 120ms ease, transform 120ms ease;
+}
+
+.history-event-target:hover .history-point,
+.history-event-target:focus .history-point {
+  r: 7;
+  filter: drop-shadow(0 0 7px var(--history-line-color));
+  transform: scale(1.08);
 }
 
 .history-label {
   fill: var(--fg);
   font-size: 11px;
+}
+
+.history-y-label {
+  text-anchor: end;
+}
+
+.history-date-label {
+  text-anchor: middle;
+}
+
+.history-tooltip {
+  position: fixed;
+  z-index: 60;
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(300px, calc(100vh - 36px));
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  padding: 12px 14px;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  box-shadow: 0 16px 46px color-mix(in srgb, #000 44%, transparent);
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.history-tooltip[hidden] {
+  display: none;
+}
+
+.history-tooltip time {
+  display: block;
+  color: color-mix(in srgb, var(--fg) 66%, transparent);
+  font-size: 11px;
+}
+
+.history-tooltip strong {
+  display: block;
+  margin: 2px 0 7px;
+  color: var(--history-line-color);
+  font-family: var(--title-font);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.history-tooltip ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 17px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .danger {
@@ -1074,6 +1247,54 @@ td {
   margin-top: 14px;
   color: color-mix(in srgb, var(--fg) 68%, transparent);
   font-size: 12px;
+}
+
+.developer-fieldset {
+  margin: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 18px 0 0;
+}
+
+.developer-fieldset legend {
+  padding: 0 8px 0 0;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.developer-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  border: 1px solid var(--line);
+  padding: 14px;
+  background: var(--glass-input);
+}
+
+.developer-card strong {
+  font-size: 14px;
+}
+
+.developer-card p {
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--fg) 68%, transparent);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.developer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.developer-actions .primary,
+.developer-actions .ghost {
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
 }
 
 :root[data-theme="webtess"] body {
@@ -1633,11 +1854,11 @@ td {
 }
 
 :root[data-theme="hacker"] .history-chart {
-  min-height: 180px;
+  min-height: 260px;
 }
 
 :root[data-theme="hacker"] .history-svg {
-  height: 190px;
+  height: 260px;
 }
 
 :root[data-theme="hacker"] .history-axis,
@@ -2746,5 +2967,29 @@ td {
   .history-chart {
     min-height: 220px;
     padding: 8px;
+  }
+
+  .history-market-head,
+  .developer-card {
+    grid-template-columns: 1fr;
+  }
+
+  .history-summary {
+    grid-template-columns: auto 1fr;
+    text-align: left;
+  }
+
+  .history-svg {
+    min-width: 620px;
+    height: 270px;
+  }
+
+  .developer-actions {
+    flex-wrap: wrap;
+  }
+
+  .developer-actions .primary,
+  .developer-actions .ghost {
+    flex: 1 1 150px;
   }
 }

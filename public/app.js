@@ -4,14 +4,17 @@ const state = {
   urlPinned: loadUrlPinnedSubjects(),
   detailSubject: '',
   revealedChanges: new Set(),
-  latestChanges: []
+  latestChanges: [],
+  historySnapshots: [],
+  historyLiveSnapshots: [],
+  historySubject: '',
+  historyIsDemo: false
 };
 
 const els = {
   form: document.querySelector('#scrapeForm'),
   email: document.querySelector('#email'),
   password: document.querySelector('#password'),
-  url: document.querySelector('#url'),
   status: document.querySelector('#status'),
   subjectPicker: document.querySelector('#subjectPicker'),
   selectionCount: document.querySelector('#selectionCount'),
@@ -28,9 +31,13 @@ const els = {
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   historyStatus: document.querySelector('#historyStatus'),
+  historySubjectSelect: document.querySelector('#historySubjectSelect'),
+  historySummary: document.querySelector('#historySummary'),
   historyChart: document.querySelector('#historyChart'),
   historyExportButton: document.querySelector('#historyExportButton'),
   historyDeleteButton: document.querySelector('#historyDeleteButton'),
+  loadExampleHistoryButton: document.querySelector('#loadExampleHistoryButton'),
+  exitExampleHistoryButton: document.querySelector('#exitExampleHistoryButton'),
   revealModal: document.querySelector('#revealModal'),
   revealList: document.querySelector('#revealList'),
   revealAllButton: document.querySelector('#revealAllButton'),
@@ -1079,39 +1086,275 @@ function formatSnapshotPoints(item) {
   return '--';
 }
 
-function renderHistoryChart(snapshots) {
+function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
   if (!els.historyChart) return;
-  if (!snapshots.length) {
+  const receivedSnapshots = arguments.length > 0;
+  if (receivedSnapshots) {
+    state.historySnapshots = Array.isArray(snapshots) ? snapshots : [];
+    state.historyIsDemo = options.demo === true;
+    if (!state.historyIsDemo) state.historyLiveSnapshots = state.historySnapshots;
+  }
+  snapshots = state.historySnapshots;
+  updateHistoryDemoControls();
+
+  const subjects = historySubjects(snapshots);
+  renderHistorySubjectOptions(subjects);
+  if (!snapshots.length || !subjects.length) {
+    els.historyChart.removeAttribute('data-tone');
     els.historyChart.innerHTML = '<p class="muted chart-empty">暂无历史记录。</p>';
+    if (els.historySummary) els.historySummary.hidden = true;
     return;
   }
-  const subjects = [...new Set(snapshots.flatMap((snapshot) => snapshot.grades.map((grade) => grade.subject)))];
-  const width = 900;
-  const height = 260;
-  const padding = 34;
-  const maxScore = Math.max(105, ...snapshots.flatMap((snapshot) => snapshot.grades.map((grade) => grade.score)));
-  const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16'];
-  const xFor = (index) => padding + (snapshots.length === 1 ? 0.5 : index / (snapshots.length - 1)) * (width - padding * 2);
-  const yFor = (score) => height - padding - (score / maxScore) * (height - padding * 2);
-  const lines = subjects.map((subject, subjectIndex) => {
-    const points = snapshots.map((snapshot, index) => {
-      const grade = snapshot.grades.find((item) => item.subject === subject);
-      return grade ? { x: xFor(index), y: yFor(grade.score), score: grade.score } : null;
-    }).filter(Boolean);
-    if (!points.length) return '';
-    const path = points.map((point, index) => (index ? 'L' : 'M') + point.x + ' ' + point.y).join(' ');
-    const color = colors[subjectIndex % colors.length];
-    const dots = points.map((point) => `<circle class="history-point" cx="${point.x}" cy="${point.y}" r="3.5" fill="${color}"><title>${escapeHtml(subject)} ${roundHundredths(point.score)}%</title></circle>`).join('');
-    return `<path class="history-line" d="${path}" stroke="${color}"></path>${dots}<text class="history-label" x="${points.at(-1).x + 6}" y="${points.at(-1).y + 4}">${escapeHtml(subject.slice(0, 22))}</text>`;
+
+  if (!subjects.includes(state.historySubject)) state.historySubject = subjects[0];
+  renderHistorySubjectOptions(subjects);
+  const subject = state.historySubject;
+  const width = Math.max(920, snapshots.length * 38 + 78);
+  const height = 310;
+  const plot = { left: 54, right: 24, top: 28, bottom: 46 };
+  const points = snapshots.map((snapshot, snapshotIndex) => {
+    const grade = snapshot.grades.find((item) => item.subject === subject);
+    return grade ? { snapshot, snapshotIndex, score: grade.score } : null;
+  }).filter(Boolean);
+  if (!points.length) return;
+
+  const scores = points.map((point) => point.score);
+  let minScore = Math.floor((Math.min(...scores) - 3) / 5) * 5;
+  let maxScore = Math.ceil((Math.max(...scores) + 3) / 5) * 5;
+  minScore = Math.max(0, minScore);
+  maxScore = Math.min(120, maxScore);
+  if (maxScore - minScore < 10) {
+    minScore = Math.max(0, minScore - 5);
+    maxScore = Math.min(120, maxScore + 5);
+  }
+  const chartRange = Math.max(1, maxScore - minScore);
+  const xFor = (index) => plot.left + (snapshots.length === 1 ? 0.5 : index / (snapshots.length - 1)) * (width - plot.left - plot.right);
+  const yFor = (score) => height - plot.bottom - ((score - minScore) / chartRange) * (height - plot.top - plot.bottom);
+  points.forEach((point) => {
+    point.x = xFor(point.snapshotIndex);
+    point.y = yFor(point.score);
+  });
+
+  const firstScore = points[0].score;
+  const lastScore = points.at(-1).score;
+  const periodDelta = roundHundredths(lastScore - firstScore);
+  const tone = periodDelta > 0 ? 'gain' : periodDelta < 0 ? 'loss' : 'flat';
+  els.historyChart.dataset.tone = tone;
+  renderHistorySummary(points, periodDelta);
+
+  const linePath = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
+  const areaPath = `${linePath} L ${points.at(-1).x} ${height - plot.bottom} L ${points[0].x} ${height - plot.bottom} Z`;
+  const gridLines = Array.from({ length: 5 }, (_, index) => {
+    const score = maxScore - (chartRange * index / 4);
+    const y = yFor(score);
+    return `<line class="history-grid" x1="${plot.left}" y1="${y}" x2="${width - plot.right}" y2="${y}"></line><text class="history-label history-y-label" x="${plot.left - 10}" y="${y + 4}">${roundHundredths(score)}</text>`;
   }).join('');
+  const labelIndexes = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])];
+  const dateLabels = labelIndexes.map((pointIndex) => {
+    const point = points[pointIndex];
+    return `<text class="history-label history-date-label" x="${point.x}" y="${height - 16}">${escapeHtml(formatHistoryDate(point.snapshot.capturedAt, false))}</text>`;
+  }).join('');
+  const pointSpacing = points.length > 1 ? Math.abs(points[1].x - points[0].x) : width - plot.left - plot.right;
+  const eventHitWidth = clamp(pointSpacing * 0.72, 28, 68);
+  const eventTargets = points.map((point, index) => {
+    const events = historyEventsForPoint(points, index, subject);
+    const label = `${subject} ${roundHundredths(point.score)}%，${formatHistoryDate(point.snapshot.capturedAt, true)}，${events.join('；')}`;
+    return `<g class="history-event-target" data-point-index="${index}" tabindex="0" role="button" aria-label="${escapeHtml(label)}">
+      <rect class="history-event-hitbox" x="${point.x - eventHitWidth / 2}" y="${plot.top}" width="${eventHitWidth}" height="${height - plot.top - plot.bottom}"></rect>
+      <line class="history-event-line" x1="${point.x}" y1="${plot.top}" x2="${point.x}" y2="${height - plot.bottom}"></line>
+      <circle class="history-point" cx="${point.x}" cy="${point.y}" r="5"></circle>
+    </g>`;
+  }).join('');
+
   els.historyChart.innerHTML = `
-    <svg class="history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="成绩历史折线图">
-      <line class="history-axis" x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}"></line>
-      <line class="history-axis" x1="${padding}" y1="${padding}" x2="${padding}" y2="${height - padding}"></line>
-      <line class="history-grid" x1="${padding}" y1="${yFor(100)}" x2="${width - padding}" y2="${yFor(100)}"></line>
-      <text class="history-label" x="8" y="${yFor(100) + 4}">100</text>
-      ${lines}
-    </svg>`;
+    <svg class="history-svg" style="min-width: ${width}px" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(subject)}成绩历史走势">
+      <defs>
+        <linearGradient id="historyAreaGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="currentColor" stop-opacity="0.28"></stop>
+          <stop offset="100%" stop-color="currentColor" stop-opacity="0"></stop>
+        </linearGradient>
+      </defs>
+      ${gridLines}
+      <path class="history-area" d="${areaPath}"></path>
+      <path class="history-line" d="${linePath}"></path>
+      ${eventTargets}
+      ${dateLabels}
+    </svg>
+    <div class="history-tooltip" role="status" hidden></div>`;
+  bindHistoryPointTooltips(points, subject);
+}
+
+function historySubjects(snapshots) {
+  const subjects = [];
+  const newestFirst = [...snapshots].reverse();
+  for (const snapshot of newestFirst) {
+    for (const grade of snapshot.grades) {
+      if (!subjects.includes(grade.subject)) subjects.push(grade.subject);
+    }
+  }
+  return subjects;
+}
+
+function renderHistorySubjectOptions(subjects) {
+  if (!els.historySubjectSelect) return;
+  els.historySubjectSelect.replaceChildren();
+  if (!subjects.length) {
+    const option = document.createElement('option');
+    option.textContent = '抓取成绩后选择';
+    els.historySubjectSelect.append(option);
+    els.historySubjectSelect.disabled = true;
+    return;
+  }
+  if (!subjects.includes(state.historySubject)) state.historySubject = subjects[0];
+  for (const subject of subjects) {
+    const option = document.createElement('option');
+    option.value = subject;
+    option.textContent = subject;
+    option.selected = subject === state.historySubject;
+    els.historySubjectSelect.append(option);
+  }
+  els.historySubjectSelect.disabled = false;
+}
+
+function renderHistorySummary(points, periodDelta) {
+  if (!els.historySummary) return;
+  const latest = points.at(-1);
+  const previous = points.at(-2);
+  const latestDelta = previous ? roundHundredths(latest.score - previous.score) : 0;
+  els.historySummary.hidden = false;
+  els.historySummary.dataset.tone = latestDelta > 0 ? 'gain' : latestDelta < 0 ? 'loss' : 'flat';
+  els.historySummary.innerHTML = `
+    <strong>${roundHundredths(latest.score)}%</strong>
+    <span>${formatSignedScore(latestDelta)} 本次</span>
+    <small>${formatSignedScore(periodDelta)} 区间 · ${points.length} 个节点</small>`;
+}
+
+function historyEventsForPoint(points, index, subject) {
+  const current = points[index]?.snapshot;
+  const previous = points[index - 1]?.snapshot;
+  if (!current) return [];
+  if (!previous) return ['建立历史基准'];
+  const currentGrade = current.grades.find((grade) => grade.subject === subject);
+  const previousGrade = previous.grades.find((grade) => grade.subject === subject);
+  if (!currentGrade || !previousGrade) return ['科目开始出现在历史记录中'];
+
+  const events = [];
+  const delta = roundHundredths(currentGrade.score - previousGrade.score);
+  if (delta !== 0) events.push(`科目总分 ${roundHundredths(previousGrade.score)}% → ${roundHundredths(currentGrade.score)}%（${formatSignedScore(delta)}）`);
+  const oldAssignments = new Map(previousGrade.assignments.map((item) => [assignmentKey(item), item]));
+  const newAssignments = new Map(currentGrade.assignments.map((item) => [assignmentKey(item), item]));
+  for (const [key, item] of newAssignments) {
+    const oldItem = oldAssignments.get(key);
+    const title = historyAssignmentName(item);
+    if (!oldItem) {
+      events.push(`新增「${title}」：${roundHundredths(item.scorePercent)}%`);
+      continue;
+    }
+    if (valueChanged(item.scorePercent, oldItem.scorePercent)) events.push(`「${title}」改分：${roundHundredths(oldItem.scorePercent)}% → ${roundHundredths(item.scorePercent)}%`);
+    if (valueChanged(item.earned, oldItem.earned) || valueChanged(item.possible, oldItem.possible)) events.push(`「${title}」得分更新：${formatSnapshotPoints(oldItem)} → ${formatSnapshotPoints(item)}`);
+    if (valueChanged(item.itemWeight, oldItem.itemWeight)) events.push(`「${title}」权重更新：${roundHundredths(oldItem.itemWeight)}% → ${roundHundredths(item.itemWeight)}%`);
+  }
+  for (const [key, item] of oldAssignments) {
+    if (!newAssignments.has(key)) events.push(`移除「${historyAssignmentName(item)}」`);
+  }
+  return events.length ? events : ['本次快照没有可识别的作业事件'];
+}
+
+function historyAssignmentName(item) {
+  return item.title || item.category || '未命名成绩';
+}
+
+function bindHistoryPointTooltips(points, subject) {
+  const tooltip = els.historyChart?.querySelector('.history-tooltip');
+  if (!tooltip) return;
+  const show = (node, pointIndex) => {
+    const point = points[pointIndex];
+    const events = historyEventsForPoint(points, pointIndex, subject);
+    const rect = node.getBoundingClientRect();
+    tooltip.replaceChildren();
+    const date = document.createElement('time');
+    date.dateTime = point.snapshot.capturedAt;
+    date.textContent = formatHistoryDate(point.snapshot.capturedAt, true);
+    const score = document.createElement('strong');
+    score.textContent = `${roundHundredths(point.score)}%`;
+    const list = document.createElement('ul');
+    for (const event of events.slice(0, 5)) {
+      const item = document.createElement('li');
+      item.textContent = event;
+      list.append(item);
+    }
+    if (events.length > 5) {
+      const item = document.createElement('li');
+      item.textContent = `还有 ${events.length - 5} 项变化`;
+      list.append(item);
+    }
+    tooltip.append(date, score, list);
+    tooltip.hidden = false;
+    const halfWidth = Math.min(170, window.innerWidth / 2 - 12);
+    tooltip.style.left = `${clamp(rect.left + rect.width / 2, halfWidth, window.innerWidth - halfWidth)}px`;
+    const placeAbove = rect.top > tooltip.offsetHeight + 20;
+    tooltip.style.top = `${placeAbove ? rect.top - 10 : rect.bottom + 10}px`;
+    tooltip.style.transform = placeAbove ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
+  };
+  const hide = () => { tooltip.hidden = true; };
+  for (const node of els.historyChart.querySelectorAll('.history-event-target')) {
+    const pointIndex = Number(node.dataset.pointIndex);
+    const anchor = node.querySelector('.history-point') || node;
+    node.addEventListener('pointerenter', () => show(anchor, pointIndex));
+    node.addEventListener('pointerleave', hide);
+    node.addEventListener('focus', () => show(anchor, pointIndex));
+    node.addEventListener('blur', hide);
+    node.addEventListener('click', () => show(anchor, pointIndex));
+  }
+}
+
+function formatHistoryDate(value, includeTime) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '未知时间';
+  return new Intl.DateTimeFormat('zh-CN', includeTime
+    ? { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+    : { month: 'numeric', day: 'numeric' }
+  ).format(date);
+}
+
+function formatSignedScore(value) {
+  const number = roundHundredths(value);
+  return `${number > 0 ? '+' : ''}${number}`;
+}
+
+function updateHistoryDemoControls() {
+  if (els.loadExampleHistoryButton) els.loadExampleHistoryButton.hidden = state.historyIsDemo;
+  if (els.exitExampleHistoryButton) els.exitExampleHistoryButton.hidden = !state.historyIsDemo;
+}
+
+function createExampleHistory() {
+  const dayOffsets = [42, 35, 28, 21, 14, 9, 4, 0];
+  const courses = [
+    { subject: 'AP Calculus AB', scores: [84.2, 86.1, 85.4, 88.7, 90.2, 89.5, 92.1, 93.4], events: ['Limits Quiz', 'Derivative Check', 'Unit 2 Test', 'Related Rates', 'Curve Sketching', 'Optimization Quiz', 'Mock Exam', 'Final Review'] },
+    { subject: 'English Literature', scores: [91.4, 90.8, 92.2, 93.1, 92.6, 94.3, 95.1, 94.7], events: ['Poetry Response', 'Close Reading', 'Hamlet Essay', 'Seminar', 'Timed Writing', 'Research Draft', 'Presentation', 'Final Essay'] },
+    { subject: 'Physics', scores: [78.8, 81.3, 83.9, 82.7, 85.6, 87.4, 86.9, 89.2], events: ['Motion Lab', 'Kinematics Quiz', 'Forces Test', 'Friction Lab', 'Energy Quiz', 'Momentum Test', 'Waves Lab', 'Unit Exam'] },
+    { subject: 'Economics', scores: [88.5, 89.2, 91.8, 90.6, 92.4, 93.7, 92.9, 94.1], events: ['Supply Quiz', 'Market Graphs', 'Elasticity Test', 'Policy Brief', 'GDP Quiz', 'Inflation Case', 'Trade Debate', 'Macro Exam'] }
+  ];
+  const now = new Date();
+  return dayOffsets.map((daysAgo, snapshotIndex) => ({
+    capturedAt: new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, 16, 30).toISOString(),
+    grades: courses.map((course, courseIndex) => ({
+      subject: course.subject,
+      score: course.scores[snapshotIndex],
+      assignments: course.events.slice(0, snapshotIndex + 1).filter((_, eventIndex) => !(courseIndex === 2 && snapshotIndex >= 6 && eventIndex === 1)).map((title, eventIndex) => {
+        const baseScore = 76 + ((courseIndex * 11 + eventIndex * 7) % 23);
+        const revisedScore = eventIndex === 0 && snapshotIndex >= 4 ? Math.min(100, baseScore + 7) : baseScore;
+        return {
+          category: `Unit ${Math.floor(eventIndex / 2) + 1}`,
+          title,
+          earned: revisedScore,
+          possible: 100,
+          scorePercent: revisedScore,
+          itemWeight: 8 + (eventIndex % 3) * 2
+        };
+      })
+    }))
+  }));
 }
 
 async function exportEncryptedBackup() {
@@ -1234,8 +1477,7 @@ els.form.addEventListener('submit', async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email,
-        password,
-        url: els.url.value.trim()
+        password
       })
     });
     const data = await response.json();
@@ -1263,6 +1505,10 @@ els.predictionCategory?.addEventListener('change', () => {
   renderPrediction();
 });
 els.predictionScore?.addEventListener('input', renderPrediction);
+els.historySubjectSelect?.addEventListener('change', () => {
+  state.historySubject = els.historySubjectSelect.value;
+  renderHistoryChart();
+});
 els.copyLayoutButton?.addEventListener('click', copyLayoutLink);
 els.settingsButton?.addEventListener('click', openSettings);
 els.settingsCloseButton?.addEventListener('click', closeSettings);
@@ -1274,6 +1520,17 @@ for (const option of els.themeOptions) {
     if (option.checked) applyTheme(option.value);
   });
 }
+els.loadExampleHistoryButton?.addEventListener('click', () => {
+  renderHistoryChart(createExampleHistory(), { demo: true });
+  setHistoryStatus('正在预览范例数据', 'ok');
+  closeSettings();
+  els.historyChart?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+els.exitExampleHistoryButton?.addEventListener('click', () => {
+  renderHistoryChart(state.historyLiveSnapshots, { demo: false });
+  setHistoryStatus(state.historyLiveSnapshots.length ? '已恢复真实历史' : '等待抓取', state.historyLiveSnapshots.length ? 'ok' : '');
+  closeSettings();
+});
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
   if (document.documentElement.dataset.themeChoice === 'system') applyTheme('system', false);
 });
@@ -1310,6 +1567,12 @@ els.historyDeleteButton?.addEventListener('click', async () => {
   if (!window.confirm('确定删除所有加密历史记录吗？这个操作不能恢复。')) return;
   try {
     await deleteEncryptedHistory();
+    state.historySnapshots = [];
+    state.historyLiveSnapshots = [];
+    state.historyIsDemo = false;
+    renderHistorySubjectOptions([]);
+    updateHistoryDemoControls();
+    if (els.historySummary) els.historySummary.hidden = true;
     if (els.historyChart) els.historyChart.innerHTML = '<p class="muted chart-empty">历史记录已删除。</p>';
     setHistoryStatus('历史已删除', 'ok');
   } catch (error) {

@@ -40,10 +40,6 @@
             <span>enter password</span>
             <input id="password" name="password" type="password" autocomplete="current-password" placeholder="local only" />
           </label>
-          <label>
-            <span>website</span>
-            <input id="url" name="webtess-url" type="url" autocomplete="url" value="https://harts.systems/webtess/parent.jsp" />
-          </label>
           <button class="primary" type="submit">抓取并更新</button>
         </form>
 
@@ -96,10 +92,19 @@
 
         <section class="panel history-panel">
           <div class="panel-head">
-            <h2>加密成绩历史</h2>
+            <h2>成绩走势</h2>
             <span id="historyStatus" class="status">等待抓取</span>
           </div>
           <p class="muted" data-human-text="历史记录功能用的是你的 WebTESS 密码，而且很神秘。你改了 WebTESS 密码可能没办法用了就">历史记录只会用你当次输入的 WebTESS 邮箱和密码在浏览器里解密。WebTESS 密码不保存；如果密码改变，旧历史可能无法解密。</p>
+          <div class="history-market-head">
+            <label class="history-subject-field">
+              <span>查看科目</span>
+              <select id="historySubjectSelect" disabled aria-label="选择要查看历史走势的科目">
+                <option>抓取成绩后选择</option>
+              </select>
+            </label>
+            <div id="historySummary" class="history-summary" hidden></div>
+          </div>
           <div id="historyChart" class="history-chart">
             <p class="muted chart-empty">成功抓取一次后会建立加密历史基准。</p>
           </div>
@@ -200,6 +205,19 @@
           </div>
         </fieldset>
         <p class="settings-note">选择后立即应用，并保存在当前浏览器中。</p>
+        <fieldset class="developer-fieldset">
+          <legend>开发者工具</legend>
+          <div class="developer-card">
+            <div>
+              <strong>成绩走势范例</strong>
+              <p>载入一组仅供预览的多科历史数据，用来调整折线图、节点提示和响应式布局。不会上传或覆盖真实记录。</p>
+            </div>
+            <div class="developer-actions">
+              <button id="loadExampleHistoryButton" class="primary compact" type="button">载入范例数据</button>
+              <button id="exitExampleHistoryButton" class="ghost compact" type="button" hidden>退出范例</button>
+            </div>
+          </div>
+        </fieldset>
       </section>
     </div>
 
