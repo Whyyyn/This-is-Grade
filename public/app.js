@@ -10,7 +10,8 @@ const state = {
   historySubject: '',
   historyIsDemo: false,
   historyTooltipPinned: false,
-  historyTooltipPoint: -1
+  historyTooltipPoint: -1,
+  historyTooltipHideTimer: null
 };
 
 const els = {
@@ -1282,8 +1283,6 @@ function historyEventsForPoint(points, index, subject) {
   if (!currentGrade || !previousGrade) return ['科目开始出现在历史记录中'];
 
   const events = [];
-  const delta = roundHundredths(currentGrade.score - previousGrade.score);
-  if (delta !== 0) events.push(`科目总分 ${roundHundredths(previousGrade.score)}% → ${roundHundredths(currentGrade.score)}%（${formatSignedScore(delta)}）`);
   const oldAssignments = new Map(previousGrade.assignments.map((item) => [assignmentKey(item), item]));
   const newAssignments = new Map(currentGrade.assignments.map((item) => [assignmentKey(item), item]));
   for (const [key, item] of newAssignments) {
@@ -1331,14 +1330,9 @@ function bindHistoryPointTooltips(points, subject) {
     date.dateTime = point.snapshot.capturedAt;
     date.textContent = formatHistoryDate(point.snapshot.capturedAt, true);
     const list = document.createElement('ul');
-    for (const event of events.slice(0, 5)) {
+    for (const event of events) {
       const item = document.createElement('li');
       item.textContent = event;
-      list.append(item);
-    }
-    if (events.length > 5) {
-      const item = document.createElement('li');
-      item.textContent = `还有 ${events.length - 5} 项变化`;
       list.append(item);
     }
     tooltip.append(quote, date, list);
@@ -1359,13 +1353,16 @@ function bindHistoryPointTooltips(points, subject) {
     const pointIndex = Number(node.dataset.pointIndex);
     const anchor = node.querySelector('.history-point') || node;
     node.addEventListener('pointerenter', (event) => {
-      if (event.pointerType === 'mouse' && !state.historyTooltipPinned) show(anchor, pointIndex);
+      if (event.pointerType === 'mouse' && !state.historyTooltipPinned) {
+        cancelHistoryTooltipHide();
+        show(anchor, pointIndex);
+      }
     });
-    node.addEventListener('pointerleave', () => hideHistoryTooltip(false));
+    node.addEventListener('pointerleave', scheduleHistoryTooltipHide);
     node.addEventListener('focus', () => {
       if (!state.historyTooltipPinned) show(anchor, pointIndex);
     });
-    node.addEventListener('blur', () => hideHistoryTooltip(false));
+    node.addEventListener('blur', scheduleHistoryTooltipHide);
     node.addEventListener('click', (event) => {
       event.preventDefault();
       const isSamePinnedPoint = state.historyTooltipPinned && state.historyTooltipPoint === pointIndex;
@@ -1382,12 +1379,25 @@ function bindHistoryPointTooltips(points, subject) {
 
 function hideHistoryTooltip(force) {
   if (!els.historyTooltip || (!force && state.historyTooltipPinned)) return;
+  cancelHistoryTooltipHide();
   els.historyTooltip.hidden = true;
   els.historyTooltip.style.visibility = '';
   if (force) {
     state.historyTooltipPinned = false;
     state.historyTooltipPoint = -1;
   }
+}
+
+function scheduleHistoryTooltipHide() {
+  if (state.historyTooltipPinned) return;
+  cancelHistoryTooltipHide();
+  state.historyTooltipHideTimer = window.setTimeout(() => hideHistoryTooltip(false), 240);
+}
+
+function cancelHistoryTooltipHide() {
+  if (state.historyTooltipHideTimer === null) return;
+  window.clearTimeout(state.historyTooltipHideTimer);
+  state.historyTooltipHideTimer = null;
 }
 
 function formatHistoryDate(value, includeTime) {
@@ -1626,10 +1636,14 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') hideHistoryTooltip(true);
 });
 document.addEventListener('pointerdown', (event) => {
-  if (!event.target.closest?.('.history-event-target')) hideHistoryTooltip(true);
+  if (!event.target.closest?.('.history-event-target, .history-tooltip')) hideHistoryTooltip(true);
 });
 window.addEventListener('resize', () => hideHistoryTooltip(true));
-document.addEventListener('scroll', () => hideHistoryTooltip(true), true);
+document.addEventListener('scroll', (event) => {
+  if (event.target !== els.historyTooltip) hideHistoryTooltip(true);
+}, true);
+els.historyTooltip?.addEventListener('pointerenter', cancelHistoryTooltipHide);
+els.historyTooltip?.addEventListener('pointerleave', scheduleHistoryTooltipHide);
 els.refreshButton.addEventListener('click', () => {
   if (els.email.value.trim() && els.password.value) {
     els.form.requestSubmit();
