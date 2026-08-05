@@ -35,6 +35,8 @@
   --fg: #ffffff;
   --accent: #9cff00;
   --accent-strong: #7fd600;
+  --market-up: #f05d6f;
+  --market-down: #22c55e;
   --line: color-mix(in srgb, var(--fg) 22%, transparent);
   --line-strong: color-mix(in srgb, var(--fg) 36%, transparent);
   --surface: color-mix(in srgb, var(--fg) 10%, transparent);
@@ -52,6 +54,11 @@
   --scene-bg: linear-gradient(115deg, color-mix(in srgb, var(--bg) 6%, transparent), color-mix(in srgb, var(--bg) 72%, transparent) 84%), url("/assets/geometric-glass-bg.png") center top / cover no-repeat, radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--fg) 10%, transparent), transparent 32%), var(--bg);
   --title-font: "ThisIsGradeFuturaTitle", "Futura Bold", "Futura-Bold", Futura, "Futura PT", "Century Gothic", "Avenir Next", sans-serif;
   --ui-font: "ThisIsGradeFutura", Futura, "Futura PT", "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
+}
+
+:root[data-market-mode="international"] {
+  --market-up: #22c55e;
+  --market-down: #f05d6f;
 }
 
 :root[data-theme="light"] {
@@ -929,11 +936,11 @@ td {
 }
 
 .history-summary[data-tone="gain"] {
-  --history-line-color: #22c55e;
+  --history-line-color: var(--market-up);
 }
 
 .history-summary[data-tone="loss"] {
-  --history-line-color: #f05d6f;
+  --history-line-color: var(--market-down);
 }
 
 .history-chart {
@@ -950,11 +957,11 @@ td {
 }
 
 .history-chart[data-tone="gain"] {
-  --history-line-color: #22c55e;
+  --history-line-color: var(--market-up);
 }
 
 .history-chart[data-tone="loss"] {
-  --history-line-color: #f05d6f;
+  --history-line-color: var(--market-down);
 }
 
 .history-svg {
@@ -972,12 +979,21 @@ td {
 }
 
 .history-line {
+  --history-segment-color: var(--history-line-color);
   fill: none;
-  stroke: var(--history-line-color);
+  stroke: var(--history-segment-color);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--history-line-color) 38%, transparent));
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--history-segment-color) 38%, transparent));
+}
+
+.history-line[data-tone="gain"] {
+  --history-segment-color: var(--market-up);
+}
+
+.history-line[data-tone="loss"] {
+  --history-segment-color: var(--market-down);
 }
 
 .history-area {
@@ -986,8 +1002,17 @@ td {
 }
 
 .history-event-target {
+  --history-point-color: var(--accent);
   cursor: pointer;
   outline: none;
+}
+
+.history-event-target[data-tone="gain"] {
+  --history-point-color: var(--market-up);
+}
+
+.history-event-target[data-tone="loss"] {
+  --history-point-color: var(--market-down);
 }
 
 .history-event-hitbox {
@@ -1005,13 +1030,13 @@ td {
 
 .history-event-target:hover .history-event-line,
 .history-event-target:focus .history-event-line {
-  stroke: var(--history-line-color);
+  stroke: var(--history-point-color);
   stroke-width: 1.5;
   stroke-dasharray: none;
 }
 
 .history-point {
-  fill: var(--history-line-color);
+  fill: var(--history-point-color);
   stroke: color-mix(in srgb, var(--bg) 80%, transparent);
   stroke-width: 2;
   cursor: pointer;
@@ -1024,7 +1049,7 @@ td {
 .history-event-target:hover .history-point,
 .history-event-target:focus .history-point {
   r: 7;
-  filter: drop-shadow(0 0 7px var(--history-line-color));
+  filter: drop-shadow(0 0 7px var(--history-point-color));
   transform: scale(1.08);
 }
 
@@ -1042,6 +1067,7 @@ td {
 }
 
 .history-tooltip {
+  --history-event-color: var(--accent);
   position: fixed;
   z-index: 60;
   width: min(340px, calc(100vw - 24px));
@@ -1053,9 +1079,16 @@ td {
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   box-shadow: 0 16px 46px color-mix(in srgb, #000 44%, transparent);
   pointer-events: none;
-  transform: translate(-50%, -100%);
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.history-tooltip[data-tone="gain"] {
+  --history-event-color: var(--market-up);
+}
+
+.history-tooltip[data-tone="loss"] {
+  --history-event-color: var(--market-down);
 }
 
 .history-tooltip[hidden] {
@@ -1064,17 +1097,30 @@ td {
 
 .history-tooltip time {
   display: block;
+  margin: 1px 0 10px;
   color: color-mix(in srgb, var(--fg) 66%, transparent);
   font-size: 11px;
 }
 
-.history-tooltip strong {
-  display: block;
-  margin: 2px 0 7px;
-  color: var(--history-line-color);
+.history-tooltip-quote {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.history-tooltip-quote strong {
+  color: var(--history-event-color);
   font-family: var(--title-font);
-  font-size: 26px;
+  font-size: 38px;
+  font-weight: 700;
   line-height: 1;
+}
+
+.history-tooltip-delta {
+  color: var(--history-event-color);
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .history-tooltip ul {
@@ -1084,6 +1130,10 @@ td {
   padding-left: 17px;
   font-size: 12px;
   line-height: 1.4;
+}
+
+.history-tooltip li::marker {
+  color: var(--history-event-color);
 }
 
 .danger {
@@ -1246,6 +1296,68 @@ td {
 .settings-note {
   margin-top: 14px;
   color: color-mix(in srgb, var(--fg) 68%, transparent);
+  font-size: 12px;
+}
+
+.market-mode-fieldset {
+  margin: 20px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 18px 0 0;
+}
+
+.market-mode-fieldset legend {
+  padding: 0 8px 0 0;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.market-mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.market-mode-option {
+  position: relative;
+  display: block;
+  margin: 0;
+  border: 1px solid var(--line);
+  padding: 12px;
+  background: var(--glass-input);
+  cursor: pointer;
+}
+
+.market-mode-option:hover,
+.market-mode-option:has(input:focus-visible),
+.market-mode-option:has(input:checked) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.market-mode-option input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.market-mode-option span {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.market-mode-option strong {
+  font-size: 14px;
+}
+
+.market-mode-option small {
+  color: color-mix(in srgb, var(--fg) 66%, transparent);
   font-size: 12px;
 }
 
@@ -1862,14 +1974,17 @@ td {
 }
 
 :root[data-theme="hacker"] .history-axis,
-:root[data-theme="hacker"] .history-grid,
-:root[data-theme="hacker"] .history-line,
-:root[data-theme="hacker"] .history-point {
+:root[data-theme="hacker"] .history-grid {
   stroke: #00ff41 !important;
 }
 
+:root[data-theme="hacker"] .history-line {
+  stroke: var(--history-segment-color) !important;
+}
+
 :root[data-theme="hacker"] .history-point {
-  fill: #000000 !important;
+  fill: var(--history-point-color) !important;
+  stroke: #000000 !important;
 }
 
 :root[data-theme="hacker"] .settings-modal,
@@ -2971,6 +3086,10 @@ td {
 
   .history-market-head,
   .developer-card {
+    grid-template-columns: 1fr;
+  }
+
+  .market-mode-options {
     grid-template-columns: 1fr;
   }
 

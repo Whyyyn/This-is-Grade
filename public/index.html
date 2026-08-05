@@ -205,6 +205,19 @@
           </div>
         </fieldset>
         <p class="settings-note">选择后立即应用，并保存在当前浏览器中。</p>
+        <fieldset class="market-mode-fieldset">
+          <legend>涨跌颜色</legend>
+          <div class="market-mode-options">
+            <label class="market-mode-option">
+              <input type="radio" name="market-mode" value="a-share" />
+              <span><strong>A股模式</strong><small>红涨绿跌</small></span>
+            </label>
+            <label class="market-mode-option">
+              <input type="radio" name="market-mode" value="international" />
+              <span><strong>国际模式</strong><small>绿涨红跌</small></span>
+            </label>
+          </div>
+        </fieldset>
         <fieldset class="developer-fieldset">
           <legend>开发者工具</legend>
           <div class="developer-card">
@@ -220,6 +233,8 @@
         </fieldset>
       </section>
     </div>
+
+    <div id="historyTooltip" class="history-tooltip" role="status" hidden></div>
 
     <div id="revealModal" class="modal-backdrop" hidden>
       <section class="reveal-modal" role="dialog" aria-modal="true" aria-labelledby="revealTitle">

@@ -8,7 +8,9 @@ const state = {
   historySnapshots: [],
   historyLiveSnapshots: [],
   historySubject: '',
-  historyIsDemo: false
+  historyIsDemo: false,
+  historyTooltipPinned: false,
+  historyTooltipPoint: -1
 };
 
 const els = {
@@ -28,12 +30,14 @@ const els = {
   settingsModal: document.querySelector('#settingsModal'),
   settingsCloseButton: document.querySelector('#settingsCloseButton'),
   themeOptions: [...document.querySelectorAll('input[name="theme"]')],
+  marketModeOptions: [...document.querySelectorAll('input[name="market-mode"]')],
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   historyStatus: document.querySelector('#historyStatus'),
   historySubjectSelect: document.querySelector('#historySubjectSelect'),
   historySummary: document.querySelector('#historySummary'),
   historyChart: document.querySelector('#historyChart'),
+  historyTooltip: document.querySelector('#historyTooltip'),
   historyExportButton: document.querySelector('#historyExportButton'),
   historyDeleteButton: document.querySelector('#historyDeleteButton'),
   loadExampleHistoryButton: document.querySelector('#loadExampleHistoryButton'),
@@ -58,6 +62,7 @@ const CHANGELOG_URL = 'https://github.com/Whyyyn/This-is-Grade/commits/main/';
 let changelogLoaded = false;
 
 applyTheme(loadTheme(), false);
+applyMarketMode(loadMarketMode());
 
 function roundTenths(value) {
   return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
@@ -117,6 +122,31 @@ function applyTheme(theme, writeUrl = true) {
 
 function isThemeChoice(value) {
   return ['system', 'light', 'dark', 'webtess', 'hacker'].includes(value);
+}
+
+function loadMarketMode() {
+  try {
+    const saved = localStorage.getItem('grade-market-mode');
+    if (isMarketMode(saved)) return saved;
+  } catch {
+    // Ignore storage failures in strict privacy modes.
+  }
+  return 'a-share';
+}
+
+function applyMarketMode(mode) {
+  const nextMode = isMarketMode(mode) ? mode : 'a-share';
+  document.documentElement.dataset.marketMode = nextMode;
+  for (const option of els.marketModeOptions) option.checked = option.value === nextMode;
+  try {
+    localStorage.setItem('grade-market-mode', nextMode);
+  } catch {
+    // Ignore storage failures in strict privacy modes.
+  }
+}
+
+function isMarketMode(value) {
+  return ['a-share', 'international'].includes(value);
 }
 
 function openSettings() {
@@ -1088,6 +1118,7 @@ function formatSnapshotPoints(item) {
 
 function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
   if (!els.historyChart) return;
+  hideHistoryTooltip(true);
   const receivedSnapshots = arguments.length > 0;
   if (receivedSnapshots) {
     state.historySnapshots = Array.isArray(snapshots) ? snapshots : [];
@@ -1109,14 +1140,19 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
   if (!subjects.includes(state.historySubject)) state.historySubject = subjects[0];
   renderHistorySubjectOptions(subjects);
   const subject = state.historySubject;
-  const width = Math.max(920, snapshots.length * 38 + 78);
+  const points = [];
+  for (const snapshot of snapshots) {
+    const grade = snapshot.grades.find((item) => item.subject === subject);
+    if (!grade) continue;
+    const previousPoint = points.at(-1);
+    if (!previousPoint || Math.abs(grade.score - previousPoint.score) >= 0.01) {
+      points.push({ snapshot, score: grade.score });
+    }
+  }
+  if (!points.length) return;
+  const width = Math.max(920, points.length * 38 + 78);
   const height = 310;
   const plot = { left: 54, right: 24, top: 28, bottom: 46 };
-  const points = snapshots.map((snapshot, snapshotIndex) => {
-    const grade = snapshot.grades.find((item) => item.subject === subject);
-    return grade ? { snapshot, snapshotIndex, score: grade.score } : null;
-  }).filter(Boolean);
-  if (!points.length) return;
 
   const scores = points.map((point) => point.score);
   let minScore = Math.floor((Math.min(...scores) - 3) / 5) * 5;
@@ -1128,10 +1164,10 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
     maxScore = Math.min(120, maxScore + 5);
   }
   const chartRange = Math.max(1, maxScore - minScore);
-  const xFor = (index) => plot.left + (snapshots.length === 1 ? 0.5 : index / (snapshots.length - 1)) * (width - plot.left - plot.right);
+  const xFor = (index) => plot.left + (points.length === 1 ? 0.5 : index / (points.length - 1)) * (width - plot.left - plot.right);
   const yFor = (score) => height - plot.bottom - ((score - minScore) / chartRange) * (height - plot.top - plot.bottom);
-  points.forEach((point) => {
-    point.x = xFor(point.snapshotIndex);
+  points.forEach((point, index) => {
+    point.x = xFor(index);
     point.y = yFor(point.score);
   });
 
@@ -1144,6 +1180,12 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
 
   const linePath = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
   const areaPath = `${linePath} L ${points.at(-1).x} ${height - plot.bottom} L ${points[0].x} ${height - plot.bottom} Z`;
+  const lineSegments = points.slice(1).map((point, index) => {
+    const previousPoint = points[index];
+    const delta = point.score - previousPoint.score;
+    const segmentTone = delta > 0 ? 'gain' : delta < 0 ? 'loss' : 'flat';
+    return `<path class="history-line" data-tone="${segmentTone}" d="M ${previousPoint.x} ${previousPoint.y} L ${point.x} ${point.y}"></path>`;
+  }).join('');
   const gridLines = Array.from({ length: 5 }, (_, index) => {
     const score = maxScore - (chartRange * index / 4);
     const y = yFor(score);
@@ -1158,8 +1200,10 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
   const eventHitWidth = clamp(pointSpacing * 0.72, 28, 68);
   const eventTargets = points.map((point, index) => {
     const events = historyEventsForPoint(points, index, subject);
+    const pointDelta = index ? point.score - points[index - 1].score : 0;
+    const pointTone = pointDelta > 0 ? 'gain' : pointDelta < 0 ? 'loss' : 'flat';
     const label = `${subject} ${roundHundredths(point.score)}%，${formatHistoryDate(point.snapshot.capturedAt, true)}，${events.join('；')}`;
-    return `<g class="history-event-target" data-point-index="${index}" tabindex="0" role="button" aria-label="${escapeHtml(label)}">
+    return `<g class="history-event-target" data-point-index="${index}" data-tone="${pointTone}" tabindex="0" role="button" aria-label="${escapeHtml(label)}">
       <rect class="history-event-hitbox" x="${point.x - eventHitWidth / 2}" y="${plot.top}" width="${eventHitWidth}" height="${height - plot.top - plot.bottom}"></rect>
       <line class="history-event-line" x1="${point.x}" y1="${plot.top}" x2="${point.x}" y2="${height - plot.bottom}"></line>
       <circle class="history-point" cx="${point.x}" cy="${point.y}" r="5"></circle>
@@ -1176,11 +1220,10 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
       </defs>
       ${gridLines}
       <path class="history-area" d="${areaPath}"></path>
-      <path class="history-line" d="${linePath}"></path>
+      ${lineSegments}
       ${eventTargets}
       ${dateLabels}
-    </svg>
-    <div class="history-tooltip" role="status" hidden></div>`;
+    </svg>`;
   bindHistoryPointTooltips(points, subject);
 }
 
@@ -1265,18 +1308,28 @@ function historyAssignmentName(item) {
 }
 
 function bindHistoryPointTooltips(points, subject) {
-  const tooltip = els.historyChart?.querySelector('.history-tooltip');
+  const tooltip = els.historyTooltip;
   if (!tooltip) return;
   const show = (node, pointIndex) => {
     const point = points[pointIndex];
+    const previousPoint = points[pointIndex - 1];
+    const deltaValue = previousPoint ? roundHundredths(point.score - previousPoint.score) : 0;
+    const tone = deltaValue > 0 ? 'gain' : deltaValue < 0 ? 'loss' : 'flat';
     const events = historyEventsForPoint(points, pointIndex, subject);
     const rect = node.getBoundingClientRect();
     tooltip.replaceChildren();
+    tooltip.dataset.tone = tone;
+    const quote = document.createElement('div');
+    quote.className = 'history-tooltip-quote';
+    const score = document.createElement('strong');
+    score.textContent = `${roundHundredths(point.score)}%`;
+    const delta = document.createElement('span');
+    delta.className = 'history-tooltip-delta';
+    delta.textContent = `${deltaValue === 0 ? '±0' : formatSignedScore(deltaValue)} 点`;
+    quote.append(score, delta);
     const date = document.createElement('time');
     date.dateTime = point.snapshot.capturedAt;
     date.textContent = formatHistoryDate(point.snapshot.capturedAt, true);
-    const score = document.createElement('strong');
-    score.textContent = `${roundHundredths(point.score)}%`;
     const list = document.createElement('ul');
     for (const event of events.slice(0, 5)) {
       const item = document.createElement('li');
@@ -1288,23 +1341,52 @@ function bindHistoryPointTooltips(points, subject) {
       item.textContent = `还有 ${events.length - 5} 项变化`;
       list.append(item);
     }
-    tooltip.append(date, score, list);
+    tooltip.append(quote, date, list);
+    tooltip.style.visibility = 'hidden';
     tooltip.hidden = false;
-    const halfWidth = Math.min(170, window.innerWidth / 2 - 12);
-    tooltip.style.left = `${clamp(rect.left + rect.width / 2, halfWidth, window.innerWidth - halfWidth)}px`;
-    const placeAbove = rect.top > tooltip.offsetHeight + 20;
-    tooltip.style.top = `${placeAbove ? rect.top - 10 : rect.bottom + 10}px`;
-    tooltip.style.transform = placeAbove ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
+    tooltip.style.transform = 'none';
+    const tooltipWidth = tooltip.offsetWidth;
+    const tooltipHeight = tooltip.offsetHeight;
+    const left = clamp(rect.left + rect.width / 2 - tooltipWidth / 2, 12, Math.max(12, window.innerWidth - tooltipWidth - 12));
+    const above = rect.top - tooltipHeight - 12;
+    const below = rect.bottom + 12;
+    const top = clamp(above >= 12 ? above : below, 12, Math.max(12, window.innerHeight - tooltipHeight - 12));
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+    tooltip.style.visibility = 'visible';
   };
-  const hide = () => { tooltip.hidden = true; };
   for (const node of els.historyChart.querySelectorAll('.history-event-target')) {
     const pointIndex = Number(node.dataset.pointIndex);
     const anchor = node.querySelector('.history-point') || node;
-    node.addEventListener('pointerenter', () => show(anchor, pointIndex));
-    node.addEventListener('pointerleave', hide);
-    node.addEventListener('focus', () => show(anchor, pointIndex));
-    node.addEventListener('blur', hide);
-    node.addEventListener('click', () => show(anchor, pointIndex));
+    node.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'mouse' && !state.historyTooltipPinned) show(anchor, pointIndex);
+    });
+    node.addEventListener('pointerleave', () => hideHistoryTooltip(false));
+    node.addEventListener('focus', () => {
+      if (!state.historyTooltipPinned) show(anchor, pointIndex);
+    });
+    node.addEventListener('blur', () => hideHistoryTooltip(false));
+    node.addEventListener('click', (event) => {
+      event.preventDefault();
+      const isSamePinnedPoint = state.historyTooltipPinned && state.historyTooltipPoint === pointIndex;
+      if (isSamePinnedPoint) {
+        hideHistoryTooltip(true);
+        return;
+      }
+      state.historyTooltipPinned = true;
+      state.historyTooltipPoint = pointIndex;
+      show(anchor, pointIndex);
+    });
+  }
+}
+
+function hideHistoryTooltip(force) {
+  if (!els.historyTooltip || (!force && state.historyTooltipPinned)) return;
+  els.historyTooltip.hidden = true;
+  els.historyTooltip.style.visibility = '';
+  if (force) {
+    state.historyTooltipPinned = false;
+    state.historyTooltipPoint = -1;
   }
 }
 
@@ -1330,10 +1412,10 @@ function updateHistoryDemoControls() {
 function createExampleHistory() {
   const dayOffsets = [42, 35, 28, 21, 14, 9, 4, 0];
   const courses = [
-    { subject: 'AP Calculus AB', scores: [84.2, 86.1, 85.4, 88.7, 90.2, 89.5, 92.1, 93.4], events: ['Limits Quiz', 'Derivative Check', 'Unit 2 Test', 'Related Rates', 'Curve Sketching', 'Optimization Quiz', 'Mock Exam', 'Final Review'] },
-    { subject: 'English Literature', scores: [91.4, 90.8, 92.2, 93.1, 92.6, 94.3, 95.1, 94.7], events: ['Poetry Response', 'Close Reading', 'Hamlet Essay', 'Seminar', 'Timed Writing', 'Research Draft', 'Presentation', 'Final Essay'] },
-    { subject: 'Physics', scores: [78.8, 81.3, 83.9, 82.7, 85.6, 87.4, 86.9, 89.2], events: ['Motion Lab', 'Kinematics Quiz', 'Forces Test', 'Friction Lab', 'Energy Quiz', 'Momentum Test', 'Waves Lab', 'Unit Exam'] },
-    { subject: 'Economics', scores: [88.5, 89.2, 91.8, 90.6, 92.4, 93.7, 92.9, 94.1], events: ['Supply Quiz', 'Market Graphs', 'Elasticity Test', 'Policy Brief', 'GDP Quiz', 'Inflation Case', 'Trade Debate', 'Macro Exam'] }
+    { subject: 'AP Calculus AB', scores: [84.2, 84.2, 85.4, 88.7, 88.7, 89.5, 92.1, 93.4], events: ['Limits Quiz', 'Derivative Check', 'Unit 2 Test', 'Related Rates', 'Curve Sketching', 'Optimization Quiz', 'Mock Exam', 'Final Review'] },
+    { subject: 'English Literature', scores: [91.4, 91.4, 92.2, 93.1, 92.6, 92.6, 95.1, 94.7], events: ['Poetry Response', 'Close Reading', 'Hamlet Essay', 'Seminar', 'Timed Writing', 'Research Draft', 'Presentation', 'Final Essay'] },
+    { subject: 'Physics', scores: [78.8, 81.3, 83.9, 83.9, 85.6, 87.4, 86.9, 89.2], events: ['Motion Lab', 'Kinematics Quiz', 'Forces Test', 'Friction Lab', 'Energy Quiz', 'Momentum Test', 'Waves Lab', 'Unit Exam'] },
+    { subject: 'Economics', scores: [88.5, 89.2, 91.8, 91.8, 92.4, 93.7, 92.9, 94.1], events: ['Supply Quiz', 'Market Graphs', 'Elasticity Test', 'Policy Brief', 'GDP Quiz', 'Inflation Case', 'Trade Debate', 'Macro Exam'] }
   ];
   const now = new Date();
   return dayOffsets.map((daysAgo, snapshotIndex) => ({
@@ -1520,6 +1602,11 @@ for (const option of els.themeOptions) {
     if (option.checked) applyTheme(option.value);
   });
 }
+for (const option of els.marketModeOptions) {
+  option.addEventListener('change', () => {
+    if (option.checked) applyMarketMode(option.value);
+  });
+}
 els.loadExampleHistoryButton?.addEventListener('click', () => {
   renderHistoryChart(createExampleHistory(), { demo: true });
   setHistoryStatus('正在预览范例数据', 'ok');
@@ -1536,7 +1623,13 @@ window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change',
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !els.settingsModal?.hidden) closeSettings();
+  if (event.key === 'Escape') hideHistoryTooltip(true);
 });
+document.addEventListener('pointerdown', (event) => {
+  if (!event.target.closest?.('.history-event-target')) hideHistoryTooltip(true);
+});
+window.addEventListener('resize', () => hideHistoryTooltip(true));
+document.addEventListener('scroll', () => hideHistoryTooltip(true), true);
 els.refreshButton.addEventListener('click', () => {
   if (els.email.value.trim() && els.password.value) {
     els.form.requestSubmit();
