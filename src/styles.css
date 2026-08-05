@@ -50,6 +50,7 @@
   --field-fill: color-mix(in srgb, #151515 52%, transparent);
   --field-fill-empty: color-mix(in srgb, #151515 40%, transparent);
   --field-placeholder: color-mix(in srgb, #ffffff 58%, transparent);
+  --table-row-even: color-mix(in srgb, #ffffff 7%, transparent);
   --shadow: 0 28px 90px color-mix(in srgb, #000000 46%, transparent), inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 color-mix(in srgb, #000000 24%, transparent);
   --scene-bg: linear-gradient(115deg, color-mix(in srgb, var(--bg) 6%, transparent), color-mix(in srgb, var(--bg) 72%, transparent) 84%), url("/assets/geometric-glass-bg.png") center top / cover no-repeat, radial-gradient(circle at 14% 18%, color-mix(in srgb, var(--fg) 10%, transparent), transparent 32%), var(--bg);
   --title-font: "ThisIsGradeFuturaTitle", "Futura Bold", "Futura-Bold", Futura, "Futura PT", "Century Gothic", "Avenir Next", sans-serif;
@@ -78,6 +79,7 @@
   --field-fill: color-mix(in srgb, #eef3f5 46%, transparent);
   --field-fill-empty: color-mix(in srgb, #d8e0e4 34%, transparent);
   --field-placeholder: color-mix(in srgb, #111111 56%, transparent);
+  --table-row-even: color-mix(in srgb, #111111 5%, transparent);
   --shadow: 0 30px 96px color-mix(in srgb, #111111 24%, transparent), inset 0 1px 0 var(--glass-edge), inset 0 -1px 0 color-mix(in srgb, #111111 16%, transparent);
 }
 
@@ -100,6 +102,7 @@
   --field-fill: rgba(245, 245, 245, 0.94);
   --field-fill-empty: rgba(245, 245, 245, 0.9);
   --field-placeholder: rgba(45, 45, 45, 0.58);
+  --table-row-even: rgba(225, 229, 255, 0.34);
   --shadow: 0 2px 4px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.19);
   --scene-bg:
     radial-gradient(ellipse at 12% 14%, rgba(255, 255, 255, 0.88) 0 5%, rgba(255, 255, 255, 0.42) 12%, transparent 24%),
@@ -129,6 +132,7 @@
   --field-fill: #000000;
   --field-fill-empty: #000000;
   --field-placeholder: rgba(0, 255, 65, 0.58);
+  --table-row-even: rgba(0, 255, 65, 0.08);
   --shadow: 0 0 0 1px rgba(0, 255, 65, 0.12), 0 0 16px rgba(0, 255, 65, 0.06);
   --scene-bg:
     repeating-linear-gradient(0deg, transparent 0 3px, rgba(0, 255, 65, 0.035) 3px 4px),
@@ -767,6 +771,10 @@ td {
   font-size: 15px;
   line-height: 1.35;
   vertical-align: top;
+}
+
+tbody tr:nth-child(even) td {
+  background: var(--table-row-even);
 }
 
 .assignment-chart {
@@ -1549,7 +1557,7 @@ td {
 }
 
 :root[data-theme="webtess"] tbody tr:nth-child(even) td {
-  background: rgba(225, 229, 255, 0.34);
+  background: var(--table-row-even);
 }
 
 :root[data-theme="webtess"] .assignment-chart,
@@ -1895,6 +1903,10 @@ td {
   border-bottom-color: #00ff41;
   background: #000000;
   backdrop-filter: none;
+}
+
+:root[data-theme="hacker"] tbody tr:nth-child(even) td {
+  background: var(--table-row-even);
 }
 
 :root[data-theme="hacker"] th::before {
