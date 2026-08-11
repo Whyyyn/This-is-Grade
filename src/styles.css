@@ -3127,3 +3127,95 @@ tbody tr:nth-child(even) td {
     flex: 1 1 150px;
   }
 }
+
+/* Narrow desktop windows still have enough room for the dashboard, but not for
+   the fixed-width grade table. Use the available viewport and let table cells
+   wrap inside their panel instead of leaking into the page. */
+@media (min-width: 561px) and (max-width: 980px) {
+  .shell {
+    max-width: none;
+  }
+
+  .details-wrap {
+    overflow-x: hidden;
+  }
+
+  .details-wrap > table,
+  .grade-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+  }
+
+  .details-wrap > table th,
+  .details-wrap > table td {
+    min-width: 0;
+    padding-right: 7px;
+    padding-left: 7px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .grade-col-assignment {
+    width: 29%;
+  }
+
+  .grade-col-description {
+    width: 31%;
+  }
+
+  .grade-col-score {
+    width: 15%;
+  }
+
+  .grade-col-percent {
+    width: 13%;
+  }
+
+  .grade-col-weight {
+    width: 12%;
+  }
+}
+
+/* At the wider end of the compact-desktop range, tabs read better as one row. */
+@media (min-width: 721px) and (max-width: 980px) {
+  .detail-tabs {
+    grid-template-columns: repeat(var(--detail-count, 4), minmax(0, 1fr));
+  }
+
+  .detail-tabs::before,
+  .detail-tabs::after {
+    width: calc(100% / var(--detail-count, 4));
+    height: auto;
+    transform: translateX(calc(var(--detail-index, 0) * 100%));
+  }
+
+  .detail-tabs::before {
+    top: 0;
+    bottom: 0;
+  }
+
+  .detail-tabs::after {
+    top: auto;
+    bottom: 0;
+    height: 2px;
+    background: #050505;
+  }
+}
+
+/* A very narrow desktop window benefits from stacking the two lead cards.
+   The intentionally dense phone layout below 560px remains unchanged. */
+@media (min-width: 561px) and (max-width: 720px) {
+  .workspace,
+  :root[data-theme="hacker"] .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "login"
+      "average"
+      "details"
+      "history"
+      "prediction";
+  }
+}
