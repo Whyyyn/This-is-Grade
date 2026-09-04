@@ -6,6 +6,7 @@
   "scripts": {
     "build": "npm run build:css",
     "build:css": "tailwindcss -i ./src/styles.css -o ./public/styles.css --minify",
+    "test": "node --test",
     "dev": "npm run build:css && sh -c 'tailwindcss -i ./src/styles.css -o ./public/styles.css --watch & wrangler pages dev public; kill $!'",
     "dev:css": "tailwindcss -i ./src/styles.css -o ./public/styles.css --watch",
     "deploy": "npm run build && wrangler pages deploy public --project-name this-is-grade"

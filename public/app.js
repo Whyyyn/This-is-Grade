@@ -1,3 +1,10 @@
+import {
+  calculateEffortProgress,
+  defaultTermEndDate,
+  isEffortColumn,
+  sortEffortColumnsFirst
+} from './effort-progress.js';
+
 const state = {
   grades: [],
   selected: new Set(loadPinnedSubjects()),
@@ -11,7 +18,10 @@ const state = {
   historyIsDemo: false,
   historyTooltipPinned: false,
   historyTooltipPoint: -1,
-  historyTooltipHideTimer: null
+  historyTooltipHideTimer: null,
+  effortIsDemo: false,
+  effortDemoBackup: null,
+  effortEnabled: false
 };
 
 const els = {
@@ -32,6 +42,7 @@ const els = {
   settingsCloseButton: document.querySelector('#settingsCloseButton'),
   themeOptions: [...document.querySelectorAll('input[name="theme"]')],
   marketModeOptions: [...document.querySelectorAll('input[name="market-mode"]')],
+  effortFeatureToggle: document.querySelector('#effortFeatureToggle'),
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   historyStatus: document.querySelector('#historyStatus'),
@@ -43,6 +54,8 @@ const els = {
   historyDeleteButton: document.querySelector('#historyDeleteButton'),
   loadExampleHistoryButton: document.querySelector('#loadExampleHistoryButton'),
   exitExampleHistoryButton: document.querySelector('#exitExampleHistoryButton'),
+  loadExampleEffortButton: document.querySelector('#loadExampleEffortButton'),
+  exitExampleEffortButton: document.querySelector('#exitExampleEffortButton'),
   revealModal: document.querySelector('#revealModal'),
   revealList: document.querySelector('#revealList'),
   revealAllButton: document.querySelector('#revealAllButton'),
@@ -53,6 +66,21 @@ const els = {
   predictedCourse: document.querySelector('#predictedCourse'),
   predictedAverage: document.querySelector('#predictedAverage'),
   predictionDelta: document.querySelector('#predictionDelta'),
+  effortCard: document.querySelector('#effortCard'),
+  effortEndDate: document.querySelector('#effortEndDate'),
+  effortSubjectLabel: document.querySelector('#effortSubjectLabel'),
+  effortSourceLabel: document.querySelector('#effortSourceLabel'),
+  effortEmpty: document.querySelector('#effortEmpty'),
+  effortContent: document.querySelector('#effortContent'),
+  effortCurrentValue: document.querySelector('#effortCurrentValue'),
+  effortExpectedValue: document.querySelector('#effortExpectedValue'),
+  effortTimeValue: document.querySelector('#effortTimeValue'),
+  effortCurrentBar: document.querySelector('#effortCurrentBar'),
+  effortExpectedBar: document.querySelector('#effortExpectedBar'),
+  effortCurrentBarValue: document.querySelector('#effortCurrentBarValue'),
+  effortExpectedBarValue: document.querySelector('#effortExpectedBarValue'),
+  effortPace: document.querySelector('#effortPace'),
+  effortSchedule: document.querySelector('#effortSchedule'),
   changelogCard: document.querySelector('#changelogCard'),
   changelogList: document.querySelector('#changelogList'),
   changelogBuild: document.querySelector('#changelogBuild')
@@ -64,6 +92,7 @@ let changelogLoaded = false;
 
 applyTheme(loadTheme(), false);
 applyMarketMode(loadMarketMode());
+applyEffortFeatureEnabled(loadEffortFeatureEnabled(), false);
 
 function roundTenths(value) {
   return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
@@ -150,6 +179,26 @@ function isMarketMode(value) {
   return ['a-share', 'international'].includes(value);
 }
 
+function loadEffortFeatureEnabled() {
+  try {
+    return localStorage.getItem('effort-feature-enabled') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function applyEffortFeatureEnabled(enabled, save = true) {
+  state.effortEnabled = enabled === true;
+  if (els.effortFeatureToggle) els.effortFeatureToggle.checked = state.effortEnabled;
+  if (els.effortCard) els.effortCard.hidden = !state.effortEnabled;
+  if (!save) return;
+  try {
+    localStorage.setItem('effort-feature-enabled', String(state.effortEnabled));
+  } catch {
+    // The setting still works for the current page.
+  }
+}
+
 function openSettings() {
   if (!els.settingsModal) return;
   els.settingsModal.hidden = false;
@@ -162,7 +211,7 @@ function closeSettings() {
   els.settingsButton?.focus();
 }
 
-function updateGrades(grades) {
+function updateGrades(grades, options = {}) {
   state.grades = grades
     .map((grade) => ({
       subject: String(grade.subject || '').trim(),
@@ -176,7 +225,7 @@ function updateGrades(grades) {
   state.selected = new Set(resolvePinnedSubjects(preferredSubjects, state.grades).slice(0, 4));
   if (!state.selected.size) {
     state.selected = new Set(state.grades.slice(0, 4).map((grade) => grade.subject));
-    if (!state.urlPinned.length) savePinnedSubjects();
+    if (!state.urlPinned.length && options.saveDefaultSelection !== false) savePinnedSubjects();
   }
   render();
 }
@@ -202,7 +251,7 @@ function normalizeSubjectKey(subject) {
 
 
 function normalizeAssignments(assignments) {
-  return assignments.map((item, index) => {
+  return sortEffortColumnsFirst(assignments.map((item, index) => {
     const sourceAssignment = String(item.category || '').trim();
     const sourceDescription = String(item.title || '').trim();
     return {
@@ -216,7 +265,7 @@ function normalizeAssignments(assignments) {
       scorePercent: Number(item.scorePercent),
       contribution: Number(item.contribution) || 0
     };
-  }).filter((item) => Number.isFinite(item.scorePercent));
+  }).filter((item) => Number.isFinite(item.scorePercent)));
 }
 
 function numericOrNull(value) {
@@ -334,8 +383,192 @@ function render() {
   renderDetailTabs();
   renderPredictionControls();
   renderPrediction();
+  renderEffortProgress();
   renderTable();
   renderAssignmentChart();
+}
+
+function renderEffortProgress() {
+  if (!state.effortEnabled || !els.effortEndDate) return;
+  if (!els.effortEndDate.value) els.effortEndDate.value = loadEffortEndDate();
+  const grade = state.grades.find((item) => item.subject === state.detailSubject) || null;
+  const assignment = grade?.assignments.find(isEffortColumn) || null;
+  els.effortSubjectLabel.textContent = grade?.subject || '当前科目';
+  els.effortSourceLabel.textContent = assignment?.category || assignment?.title || '自动检测栏目';
+
+  if (!grade || !assignment) {
+    els.effortEmpty.hidden = false;
+    els.effortContent.hidden = true;
+    els.effortEmpty.textContent = grade
+      ? '这个科目没有找到 Core Competency、Learning Behavior 或 ClassDojo 栏目。'
+      : '选择科目后，将自动检测并置顶核心素养 / ClassDojo 栏目。';
+    return;
+  }
+  els.effortEmpty.hidden = true;
+  els.effortContent.hidden = false;
+
+  const progress = calculateEffortProgress(els.effortEndDate.value, assignment.scorePercent);
+  if (!progress) return;
+
+  const current = roundHundredths(progress.currentMark);
+  const expected = roundHundredths(progress.expectedMark);
+  const expectedGain = roundHundredths(progress.expectedGain);
+  els.effortCurrentValue.textContent = current + ' / 100';
+  els.effortExpectedValue.textContent = expected + ' / 100';
+  els.effortTimeValue.textContent = progress.complete ? '已到期' : progress.calendarDaysLeft + ' 天';
+  els.effortCurrentBar.style.width = current + '%';
+  els.effortExpectedBar.style.width = expected + '%';
+  els.effortCurrentBarValue.textContent = current + '%';
+  els.effortExpectedBarValue.textContent = expected + '%';
+
+  const difference = roundHundredths(progress.difference);
+  const paceTone = difference >= 0 ? 'gain' : 'loss';
+  els.effortContent.dataset.tone = paceTone;
+  els.effortPace.dataset.tone = paceTone;
+  els.effortPace.textContent = difference > 0
+    ? '领先今日目标 ' + difference + ' 分'
+    : difference < 0
+      ? '落后今日目标 ' + Math.abs(difference) + ' 分'
+      : '已达到今日目标';
+  const daily = progress.dailyPointsNeeded === null ? '学期已结束，仍差 ' + roundHundredths(progress.pointsLeft) + ' 分'
+    : '剩余每个上学日约需 +' + roundHundredths(progress.dailyPointsNeeded) + ' 分';
+  els.effortSchedule.textContent =
+    '今日应累计获得 +' + expectedGain + ' / 70 分 · ' +
+    progress.completedSchoolDays + ' / ' + progress.totalSchoolDays + ' 个上学日 · ' + daily +
+    '（按周一至周五估算）';
+}
+
+function loadEffortEndDate() {
+  try {
+    const saved = localStorage.getItem('effort-term-end');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(saved || '')) return saved;
+  } catch {
+    // Use a nine-week default when storage is unavailable.
+  }
+  return defaultTermEndDate();
+}
+
+function createExampleEffortGrades() {
+  return [{
+    subject: 'Precalculus',
+    score: 87.4,
+    assignments: [
+      {
+        id: 'quiz-1',
+        categoryId: 'quiz',
+        category: 'Chapter 1 Quiz',
+        title: 'Functions and graphs',
+        earned: 18,
+        possible: 20,
+        itemWeight: 10,
+        scorePercent: 90,
+        contribution: 9
+      },
+      {
+        id: 'learning-behaviours',
+        categoryId: 'learning-behaviours',
+        category: 'Learning Behaviours',
+        title: 'Learning behaviours & competencies from Class dojo',
+        earned: 32,
+        possible: 100,
+        itemWeight: 14.29,
+        scorePercent: 32,
+        contribution: 4.57
+      },
+      {
+        id: 'homework-1',
+        categoryId: 'homework',
+        category: 'Homework',
+        title: 'Polynomial review',
+        earned: 10,
+        possible: 10,
+        itemWeight: 5,
+        scorePercent: 100,
+        contribution: 5
+      }
+    ]
+  }, {
+    subject: 'Physics',
+    score: 84.2,
+    assignments: [
+      {
+        id: 'lab-1',
+        categoryId: 'lab',
+        category: 'Motion Lab',
+        title: 'Constant acceleration',
+        earned: 44,
+        possible: 50,
+        itemWeight: 12,
+        scorePercent: 88,
+        contribution: 10.56
+      },
+      {
+        id: 'core-competency',
+        categoryId: 'core-competency',
+        category: 'Core Competency',
+        title: 'Learning habits from ClassDojo',
+        earned: 58,
+        possible: 100,
+        itemWeight: 14.29,
+        scorePercent: 58,
+        contribution: 8.29
+      },
+      {
+        id: 'quiz-physics-1',
+        categoryId: 'quiz',
+        category: 'Kinematics Quiz',
+        title: 'Displacement and velocity',
+        earned: 17,
+        possible: 20,
+        itemWeight: 8,
+        scorePercent: 85,
+        contribution: 6.8
+      }
+    ]
+  }];
+}
+
+function loadExampleEffortGrades() {
+  if (!state.effortIsDemo) {
+    state.effortDemoBackup = {
+      grades: state.grades,
+      selected: new Set(state.selected),
+      urlPinned: [...state.urlPinned],
+      detailSubject: state.detailSubject,
+      predictionSubject: state.predictionSubject,
+      predictionCategory: state.predictionCategory
+    };
+  }
+  state.effortIsDemo = true;
+  const exampleGrades = createExampleEffortGrades();
+  updateGrades(exampleGrades, { saveDefaultSelection: false });
+  state.selected = new Set(exampleGrades.map((grade) => grade.subject));
+  state.detailSubject = exampleGrades[0].subject;
+  render();
+  updateEffortDemoControls();
+  setStatus('正在预览核心素养范例', 'ok');
+}
+
+function exitExampleEffortGrades() {
+  const backup = state.effortDemoBackup;
+  state.effortIsDemo = false;
+  state.effortDemoBackup = null;
+  if (backup) {
+    state.grades = backup.grades;
+    state.selected = backup.selected;
+    state.urlPinned = backup.urlPinned;
+    state.detailSubject = backup.detailSubject;
+    state.predictionSubject = backup.predictionSubject;
+    state.predictionCategory = backup.predictionCategory;
+  }
+  updateEffortDemoControls();
+  render();
+  setStatus(state.grades.length ? '已恢复真实成绩' : '待连接', state.grades.length ? 'ok' : '');
+}
+
+function updateEffortDemoControls() {
+  if (els.loadExampleEffortButton) els.loadExampleEffortButton.hidden = state.effortIsDemo;
+  if (els.exitExampleEffortButton) els.exitExampleEffortButton.hidden = !state.effortIsDemo;
 }
 
 function renderPicker() {
@@ -390,6 +623,7 @@ function setDetailSubject(subject) {
   if (state.detailSubject === subject) return;
   state.detailSubject = subject;
   updateDetailTabSelection();
+  renderEffortProgress();
   renderTable();
   renderAssignmentChart();
 }
@@ -1574,6 +1808,9 @@ els.form.addEventListener('submit', async (event) => {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '抓取失败');
+    state.effortIsDemo = false;
+    state.effortDemoBackup = null;
+    updateEffortDemoControls();
     updateGrades(data);
     await storeBrowserCredential(email, password);
     setStatus('抓取完成', 'ok');
@@ -1597,6 +1834,14 @@ els.predictionCategory?.addEventListener('change', () => {
   renderPrediction();
 });
 els.predictionScore?.addEventListener('input', renderPrediction);
+els.effortEndDate?.addEventListener('change', () => {
+  try {
+    localStorage.setItem('effort-term-end', els.effortEndDate.value);
+  } catch {
+    // The selected date still works for the current page.
+  }
+  renderEffortProgress();
+});
 els.historySubjectSelect?.addEventListener('change', () => {
   state.historySubject = els.historySubjectSelect.value;
   renderHistoryChart();
@@ -1617,6 +1862,10 @@ for (const option of els.marketModeOptions) {
     if (option.checked) applyMarketMode(option.value);
   });
 }
+els.effortFeatureToggle?.addEventListener('change', () => {
+  applyEffortFeatureEnabled(els.effortFeatureToggle.checked);
+  renderEffortProgress();
+});
 els.loadExampleHistoryButton?.addEventListener('click', () => {
   renderHistoryChart(createExampleHistory(), { demo: true });
   setHistoryStatus('正在预览范例数据', 'ok');
@@ -1626,6 +1875,19 @@ els.loadExampleHistoryButton?.addEventListener('click', () => {
 els.exitExampleHistoryButton?.addEventListener('click', () => {
   renderHistoryChart(state.historyLiveSnapshots, { demo: false });
   setHistoryStatus(state.historyLiveSnapshots.length ? '已恢复真实历史' : '等待抓取', state.historyLiveSnapshots.length ? 'ok' : '');
+  closeSettings();
+});
+els.loadExampleEffortButton?.addEventListener('click', () => {
+  loadExampleEffortGrades();
+  if (state.effortEnabled) {
+    closeSettings();
+    document.querySelector('.effort-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    setStatus('范例已载入，请打开“核心素养进度”', 'ok');
+  }
+});
+els.exitExampleEffortButton?.addEventListener('click', () => {
+  exitExampleEffortGrades();
   closeSettings();
 });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
