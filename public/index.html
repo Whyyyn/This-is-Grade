@@ -275,24 +275,6 @@
               <small>在成绩明细中显示 ClassDojo 当前分数、今日目标和学期进度。</small>
             </span>
           </label>
-          <label class="feature-toggle push-feature-toggle">
-            <input id="pushFeatureToggle" type="checkbox" />
-            <span>
-              <strong>完整推送通知</strong>
-              <small>网页关闭后仍可按时提醒；此项本身只保存推送地址、提醒设置和最近一次核心素养分数。</small>
-            </span>
-          </label>
-          <div id="pushControls" class="push-controls" hidden>
-            <label>
-              <span>提醒时间</span>
-              <input id="pushTime" type="time" value="18:00" step="300" />
-            </label>
-            <label class="push-weekday-toggle">
-              <input id="pushWeekdaysOnly" type="checkbox" checked />
-              <span>仅周一至周五</span>
-            </label>
-            <p id="pushStatus" class="settings-note push-status" role="status">等待启用</p>
-          </div>
           <label class="feature-toggle realtime-feature-toggle">
             <input id="realtimeFeatureToggle" type="checkbox" />
             <span>
@@ -305,7 +287,7 @@
               <span>邀请码</span>
               <input id="realtimeInviteCode" type="password" autocomplete="off" placeholder="输入 Beta 邀请码" />
             </label>
-            <p class="settings-note realtime-note">启用前，请先在首页 WebTESS 登录框中填写邮箱和密码，并打开“完整推送通知”。</p>
+            <p class="settings-note realtime-note">启用前，请先在首页 WebTESS 登录框中填写邮箱和密码。浏览器会同时询问是否允许成绩更新通知。</p>
             <p id="realtimeStatus" class="settings-note push-status" role="status">默认关闭</p>
           </div>
         </fieldset>

@@ -17,15 +17,6 @@ export async function onRequestPost(context) {
     const body = await readJson(context.request);
     const record = validatePushRecord(body);
     const now = new Date().toISOString();
-    let progressJson = record.progress === null ? '' : JSON.stringify(record.progress);
-    const progressUpdate = record.progress === null ? '' : ', progress_json = excluded.progress_json';
-
-    if (!progressJson) {
-      const existing = await db.prepare(
-        'SELECT progress_json FROM push_subscriptions WHERE endpoint = ? LIMIT 1'
-      ).bind(record.endpoint).first();
-      progressJson = String(existing?.progress_json || '[]');
-    }
 
     await db.prepare(
       'DELETE FROM push_subscriptions WHERE endpoint = ? AND device_id <> ?'
@@ -41,19 +32,17 @@ export async function onRequestPost(context) {
          p256dh = excluded.p256dh,
          auth = excluded.auth,
          timezone = excluded.timezone,
-         notify_time = excluded.notify_time,
-         weekdays_only = excluded.weekdays_only,
          enabled = 1,
-         updated_at = excluded.updated_at${progressUpdate}`
+         updated_at = excluded.updated_at`
     ).bind(
       record.deviceId,
       record.endpoint,
       record.p256dh,
       record.auth,
       record.timezone,
-      record.notifyTime,
-      record.weekdaysOnly ? 1 : 0,
-      progressJson,
+      '00:00',
+      0,
+      '[]',
       now,
       now
     ).run();
@@ -86,36 +75,13 @@ function validatePushRecord(body) {
   const p256dh = validateBase64Url(keys.p256dh, 'p256dh');
   const auth = validateBase64Url(keys.auth, 'auth');
   const timezone = validateTimezone(body?.timezone);
-  const notifyTime = validateNotifyTime(body?.notifyTime);
   return {
     deviceId: validateDeviceId(body?.deviceId),
     endpoint,
     p256dh,
     auth,
-    timezone,
-    notifyTime,
-    weekdaysOnly: body?.weekdaysOnly !== false,
-    progress: validateProgress(body?.progress)
+    timezone
   };
-}
-
-function validateProgress(value) {
-  if (value === undefined) return null;
-  if (!Array.isArray(value)) badRequest('无效的核心素养进度。');
-  return value.slice(0, 16).map((item) => {
-    const subject = String(item?.subject || '').trim().slice(0, 80);
-    const source = String(item?.source || '').trim().slice(0, 100);
-    const endDate = String(item?.endDate || '');
-    if (!subject || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) badRequest('无效的核心素养进度。');
-    return {
-      subject,
-      source,
-      endDate,
-      current: boundedNumber(item?.current, 0, 100),
-      expected: boundedNumber(item?.expected, 0, 100),
-      difference: boundedNumber(item?.difference, -100, 100)
-    };
-  });
 }
 
 function validateDeviceId(value) {
@@ -138,21 +104,6 @@ function validateTimezone(value) {
     badRequest('无效的时区。');
   }
   return timezone;
-}
-
-function validateNotifyTime(value) {
-  const time = String(value || '');
-  const match = /^(\d{2}):(\d{2})$/.exec(time);
-  if (!match || Number(match[1]) > 23 || Number(match[2]) > 59 || Number(match[2]) % 5 !== 0) {
-    badRequest('提醒时间必须精确到 5 分钟。');
-  }
-  return time;
-}
-
-function boundedNumber(value, min, max) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < min || number > max) badRequest('无效的分数数据。');
-  return Math.round(number * 100) / 100;
 }
 
 function assertSameOrigin(request) {

@@ -44,11 +44,6 @@ const els = {
   themeOptions: [...document.querySelectorAll('input[name="theme"]')],
   marketModeOptions: [...document.querySelectorAll('input[name="market-mode"]')],
   effortFeatureToggle: document.querySelector('#effortFeatureToggle'),
-  pushFeatureToggle: document.querySelector('#pushFeatureToggle'),
-  pushControls: document.querySelector('#pushControls'),
-  pushTime: document.querySelector('#pushTime'),
-  pushWeekdaysOnly: document.querySelector('#pushWeekdaysOnly'),
-  pushStatus: document.querySelector('#pushStatus'),
   realtimeFeatureToggle: document.querySelector('#realtimeFeatureToggle'),
   realtimeControls: document.querySelector('#realtimeControls'),
   realtimeInviteCode: document.querySelector('#realtimeInviteCode'),
@@ -99,12 +94,9 @@ const els = {
 const CHANGELOG_API = 'https://api.github.com/repos/Whyyyn/This-is-Grade/commits?sha=main&per_page=100';
 const CHANGELOG_URL = 'https://github.com/Whyyyn/This-is-Grade/commits/main/';
 const PUSH_DEVICE_ID_KEY = 'grade-push-device-id';
-const PUSH_TIME_KEY = 'grade-push-time';
-const PUSH_WEEKDAYS_KEY = 'grade-push-weekdays-only';
 let pushRegistrationPromise = null;
-let pushSyncTimer = null;
-let pushBusy = false;
 let realtimeBusy = false;
+let realtimeEnrolled = false;
 let pushDeviceIdMemory = '';
 let changelogLoaded = false;
 
@@ -246,46 +238,16 @@ function updateGrades(grades, options = {}) {
     if (!state.urlPinned.length && options.saveDefaultSelection !== false) savePinnedSubjects();
   }
   render();
-  schedulePushProfileSync();
 }
 
 function pushSupported() {
   return window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
-function setPushStatus(message, tone = '') {
-  if (!els.pushStatus) return;
-  els.pushStatus.textContent = message;
-  els.pushStatus.dataset.tone = tone;
-}
-
 function setRealtimeStatus(message, tone = '') {
   if (!els.realtimeStatus) return;
   els.realtimeStatus.textContent = message;
   els.realtimeStatus.dataset.tone = tone;
-}
-
-function loadPushPreferences() {
-  let notifyTime = '18:00';
-  let weekdaysOnly = true;
-  try {
-    if (/^\d{2}:\d{2}$/.test(localStorage.getItem(PUSH_TIME_KEY) || '')) {
-      notifyTime = localStorage.getItem(PUSH_TIME_KEY);
-    }
-    weekdaysOnly = localStorage.getItem(PUSH_WEEKDAYS_KEY) !== 'false';
-  } catch {
-    // Defaults remain available in strict privacy modes.
-  }
-  return { notifyTime, weekdaysOnly };
-}
-
-function savePushPreferences() {
-  try {
-    localStorage.setItem(PUSH_TIME_KEY, els.pushTime?.value || '18:00');
-    localStorage.setItem(PUSH_WEEKDAYS_KEY, String(els.pushWeekdaysOnly?.checked !== false));
-  } catch {
-    // The controls still work for the current page.
-  }
 }
 
 function getPushDeviceId(create = false) {
@@ -312,35 +274,14 @@ function getPushRegistration() {
   return pushRegistrationPromise;
 }
 
-async function initializePushNotifications() {
-  if (!els.pushFeatureToggle) return;
-  const preferences = loadPushPreferences();
-  els.pushTime.value = preferences.notifyTime;
-  els.pushWeekdaysOnly.checked = preferences.weekdaysOnly;
-  if (!pushSupported()) {
-    els.pushFeatureToggle.disabled = true;
-    els.pushControls.hidden = false;
-    els.pushTime.disabled = true;
-    els.pushWeekdaysOnly.disabled = true;
-    setPushStatus('此浏览器不支持后台推送。', 'bad');
-    return;
-  }
-  try {
-    const registration = await getPushRegistration();
-    const subscription = await registration.pushManager.getSubscription();
-    const enabled = Boolean(subscription);
-    els.pushFeatureToggle.checked = enabled;
-    els.pushControls.hidden = !enabled;
-    setPushStatus(enabled ? '推送已启用；分数以最近一次抓取为准。' : '默认关闭', enabled ? 'ok' : '');
-    if (enabled) schedulePushProfileSync(0);
-  } catch {
-    els.pushFeatureToggle.disabled = true;
-    setPushStatus('无法注册后台推送服务。', 'bad');
-  }
-}
-
 async function initializeRealtimeBeta() {
   if (!els.realtimeFeatureToggle) return;
+  if (!pushSupported()) {
+    els.realtimeFeatureToggle.disabled = true;
+    els.realtimeControls.hidden = false;
+    setRealtimeStatus('此浏览器不支持后台成绩通知。', 'bad');
+    return;
+  }
   const deviceId = getPushDeviceId(false);
   try {
     const query = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
@@ -353,6 +294,7 @@ async function initializeRealtimeBeta() {
       setRealtimeStatus('服务器尚未配置即时通知密钥。', 'bad');
       return;
     }
+    realtimeEnrolled = result.enrolled === true;
     els.realtimeFeatureToggle.checked = result.enabled === true;
     els.realtimeControls.hidden = !result.enrolled;
     if (result.enabled) {
@@ -369,11 +311,8 @@ async function initializeRealtimeBeta() {
   }
 }
 
-async function enablePushNotifications() {
-  if (pushBusy) return false;
-  pushBusy = true;
-  els.pushFeatureToggle.disabled = true;
-  setPushStatus('正在请求通知权限…');
+async function ensureRealtimePushSubscription() {
+  if (!pushSupported()) throw new Error('此浏览器不支持后台成绩通知。');
   let newSubscription = null;
   try {
     const configResponse = await fetch('/api/push', { credentials: 'same-origin' });
@@ -381,7 +320,10 @@ async function enablePushNotifications() {
     if (!configResponse.ok || !config.configured || !config.publicKey) {
       throw new Error('服务器尚未配置推送密钥。');
     }
-    const permission = await Notification.requestPermission();
+    setRealtimeStatus('正在请求浏览器通知权限…');
+    const permission = Notification.permission === 'granted'
+      ? 'granted'
+      : await Notification.requestPermission();
     if (permission !== 'granted') throw new Error('没有获得通知权限。请在浏览器设置中允许通知。');
 
     const registration = await getPushRegistration();
@@ -393,20 +335,11 @@ async function enablePushNotifications() {
       });
       newSubscription = subscription;
     }
-    await savePushProfile(subscription);
-    els.pushFeatureToggle.checked = true;
-    els.pushControls.hidden = false;
-    setPushStatus('推送已启用；关闭网页后仍会按时提醒。', 'ok');
-    return true;
+    await savePushSubscription(subscription);
+    return subscription;
   } catch (error) {
     if (newSubscription) await newSubscription.unsubscribe().catch(() => {});
-    els.pushFeatureToggle.checked = false;
-    els.pushControls.hidden = false;
-    setPushStatus(error.message || '启用推送失败。', 'bad');
-    return false;
-  } finally {
-    pushBusy = false;
-    els.pushFeatureToggle.disabled = false;
+    throw error;
   }
 }
 
@@ -420,10 +353,8 @@ async function enableRealtimeBeta() {
     const email = els.email.value.trim();
     const password = normalizePasswordForHistory(els.password.value);
     if (!email || !password) throw new Error('请先在首页填写 WebTESS 邮箱和密码。');
-    if (!els.pushFeatureToggle.checked) {
-      const enabled = await enablePushNotifications();
-      if (!enabled) throw new Error('请先允许完整推送通知。');
-    }
+    await ensureRealtimePushSubscription();
+    setRealtimeStatus('正在验证邀请码和 WebTESS 登录…');
     const response = await fetch('/api/realtime', {
       method: 'POST',
       credentials: 'same-origin',
@@ -439,9 +370,11 @@ async function enableRealtimeBeta() {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || '即时通知启用失败。');
     els.realtimeFeatureToggle.checked = true;
+    realtimeEnrolled = true;
     if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
     setRealtimeStatus(`已启用 · Beta ${result.slot}/5 · 每天 06:00–24:00`, 'ok');
   } catch (error) {
+    if (!realtimeEnrolled) await removeRealtimePushSubscription().catch(() => {});
     els.realtimeFeatureToggle.checked = false;
     setRealtimeStatus(error.message || '即时通知启用失败。', 'bad');
   } finally {
@@ -456,18 +389,9 @@ async function disableRealtimeBeta() {
   els.realtimeFeatureToggle.disabled = true;
   setRealtimeStatus('正在关闭并删除后台登录资料…');
   try {
-    const deviceId = getPushDeviceId(false);
-    if (deviceId) {
-      const response = await fetch('/api/realtime', {
-        method: 'DELETE',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId })
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || '关闭即时通知失败。');
-    }
+    await removeRealtimePushSubscription();
     els.realtimeFeatureToggle.checked = false;
+    realtimeEnrolled = false;
     els.realtimeControls.hidden = true;
     if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
     setRealtimeStatus('即时通知已关闭，服务器端登录资料已删除。');
@@ -480,73 +404,12 @@ async function disableRealtimeBeta() {
   }
 }
 
-async function disablePushNotifications() {
-  if (pushBusy) return;
-  pushBusy = true;
-  els.pushFeatureToggle.disabled = true;
-  setPushStatus('正在关闭推送…');
-  try {
-    const registration = await getPushRegistration();
-    const subscription = await registration.pushManager.getSubscription();
-    const deviceId = getPushDeviceId(false);
-    if (deviceId) {
-      await fetch('/api/push', {
-        method: 'DELETE',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId })
-      }).catch(() => null);
-    }
-    if (subscription) await subscription.unsubscribe();
-    try { localStorage.removeItem(PUSH_DEVICE_ID_KEY); } catch {}
-    pushDeviceIdMemory = '';
-    els.pushFeatureToggle.checked = false;
-    els.pushControls.hidden = true;
-    if (els.realtimeFeatureToggle) els.realtimeFeatureToggle.checked = false;
-    if (els.realtimeControls) els.realtimeControls.hidden = true;
-    setRealtimeStatus('完整推送已关闭，即时通知登录资料也已删除。');
-    setPushStatus('推送已关闭。');
-  } catch (error) {
-    els.pushFeatureToggle.checked = true;
-    setPushStatus(error.message || '关闭推送失败。', 'bad');
-  } finally {
-    pushBusy = false;
-    els.pushFeatureToggle.disabled = false;
-  }
-}
-
-function schedulePushProfileSync(delay = 300) {
-  clearTimeout(pushSyncTimer);
-  pushSyncTimer = setTimeout(() => syncPushProfile(), delay);
-}
-
-async function syncPushProfile() {
-  if (!pushSupported() || !els.pushFeatureToggle?.checked || state.effortIsDemo) return;
-  try {
-    const registration = await getPushRegistration();
-    const subscription = await registration.pushManager.getSubscription();
-    if (!subscription) return;
-    await savePushProfile(subscription);
-    setPushStatus('推送设置已同步；分数以最近一次抓取为准。', 'ok');
-  } catch (error) {
-    setPushStatus(error.message || '推送设置同步失败。', 'bad');
-  }
-}
-
-async function savePushProfile(subscription) {
-  const notifyTime = els.pushTime?.value || '18:00';
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(notifyTime) || Number(notifyTime.slice(3)) % 5 !== 0) {
-    throw new Error('提醒时间需要精确到 5 分钟。');
-  }
-  savePushPreferences();
+async function savePushSubscription(subscription) {
   const payload = {
     deviceId: getPushDeviceId(true),
     subscription: subscription.toJSON(),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-    notifyTime,
-    weekdaysOnly: els.pushWeekdaysOnly?.checked !== false
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   };
-  if (state.grades.length && !state.effortIsDemo) payload.progress = buildPushProgressSnapshot();
   const response = await fetch('/api/push', {
     method: 'POST',
     credentials: 'same-origin',
@@ -557,22 +420,23 @@ async function savePushProfile(subscription) {
   if (!response.ok) throw new Error(result.error || '推送设置保存失败。');
 }
 
-function buildPushProgressSnapshot() {
-  const endDate = els.effortEndDate?.value || loadEffortEndDate();
-  return state.grades.flatMap((grade) => {
-    const assignment = grade.assignments.find(isEffortColumn);
-    if (!assignment) return [];
-    const progress = calculateEffortProgress(endDate, assignment.scorePercent);
-    if (!progress) return [];
-    return [{
-      subject: grade.subject,
-      source: assignment.category || assignment.title || 'Core Competency',
-      endDate,
-      current: roundHundredths(progress.currentMark),
-      expected: roundHundredths(progress.expectedMark),
-      difference: roundHundredths(progress.difference)
-    }];
-  });
+async function removeRealtimePushSubscription() {
+  const deviceId = getPushDeviceId(false);
+  if (deviceId) {
+    const response = await fetch('/api/push', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || '关闭即时通知失败。');
+  }
+  const registration = await getPushRegistration();
+  const subscription = await registration.pushManager.getSubscription();
+  if (subscription) await subscription.unsubscribe();
+  try { localStorage.removeItem(PUSH_DEVICE_ID_KEY); } catch {}
+  pushDeviceIdMemory = '';
 }
 
 function base64UrlToBytes(value) {
@@ -2215,7 +2079,6 @@ els.effortEndDate?.addEventListener('change', () => {
     // The selected date still works for the current page.
   }
   renderEffortProgress();
-  schedulePushProfileSync();
 });
 els.historySubjectSelect?.addEventListener('change', () => {
   state.historySubject = els.historySubjectSelect.value;
@@ -2241,21 +2104,9 @@ els.effortFeatureToggle?.addEventListener('change', () => {
   applyEffortFeatureEnabled(els.effortFeatureToggle.checked);
   renderEffortProgress();
 });
-els.pushFeatureToggle?.addEventListener('change', () => {
-  if (els.pushFeatureToggle.checked) enablePushNotifications();
-  else disablePushNotifications();
-});
 els.realtimeFeatureToggle?.addEventListener('change', () => {
   if (els.realtimeFeatureToggle.checked) enableRealtimeBeta();
   else disableRealtimeBeta();
-});
-els.pushTime?.addEventListener('change', () => {
-  savePushPreferences();
-  schedulePushProfileSync(0);
-});
-els.pushWeekdaysOnly?.addEventListener('change', () => {
-  savePushPreferences();
-  schedulePushProfileSync(0);
 });
 els.loadExampleHistoryButton?.addEventListener('click', () => {
   renderHistoryChart(createExampleHistory(), { demo: true });
@@ -2355,7 +2206,6 @@ els.changelogCard?.addEventListener('toggle', () => {
 
 setupHumanTranslations();
 loadBrowserCredential();
-initializePushNotifications();
 initializeRealtimeBeta();
 
 render();

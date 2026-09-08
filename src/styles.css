@@ -1652,10 +1652,6 @@ tbody tr:nth-child(even) td {
   text-transform: none;
 }
 
-.push-feature-toggle {
-  margin-top: 10px;
-}
-
 .realtime-feature-toggle {
   margin-top: 10px;
 }
@@ -1679,10 +1675,6 @@ tbody tr:nth-child(even) td {
   margin: 0;
 }
 
-.push-controls input[type="time"] {
-  width: 100%;
-}
-
 .realtime-controls {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -1694,24 +1686,6 @@ tbody tr:nth-child(even) td {
 .realtime-note {
   min-height: 0;
   margin: 0;
-}
-
-.push-weekday-toggle {
-  display: flex;
-  align-items: center;
-  align-self: end;
-  gap: 8px;
-  min-height: 42px;
-  border: 1px solid var(--line);
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
-.push-weekday-toggle input {
-  width: 18px;
-  min-height: 18px;
-  margin: 0;
-  accent-color: var(--accent);
 }
 
 .push-status {

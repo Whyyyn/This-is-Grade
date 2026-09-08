@@ -10,8 +10,7 @@ Cloudflare Pages + Pages Functions version of the WebTESS grade dashboard.
 - Does not store WebTESS passwords unless the user explicitly enables the five-person realtime notification beta.
 - Does not include any personal grades or debug files.
 - Saves optional grade history only as browser-encrypted ciphertext.
-- Can send optional Web Push reminders after the page is closed. Push storage contains only the browser push endpoint, reminder preferences, and the most recently fetched core-competency marks.
-- Can run an invitation-only realtime beta that encrypts WebTESS credentials and checks for grade changes in the background.
+- Can run an invitation-only realtime beta that encrypts WebTESS credentials, checks for grade changes in the background, and delivers changes through Web Push after the page is closed.
 
 ## Deploy With Cloudflare Dashboard
 
@@ -56,10 +55,11 @@ builds `public/styles.css` before starting Wrangler. During style-heavy work, ru
 
 ## Background Push Setup
 
-The Pages project owns `/api/push`, `/api/realtime`, and the subscription UI. A
-separate Worker in `workers/push-scheduler.js` wakes every minute. It sends due
-daily reminders and assigns each of the five realtime beta slots a different
-minute, so each enrolled account is checked once every five minutes.
+The Pages project owns `/api/push`, `/api/realtime`, and the invitation-only UI.
+The push endpoint is transport for realtime grade changes only; there is no
+separate daily reminder feature. A Worker in `workers/push-scheduler.js` wakes
+every minute and assigns each of the five beta slots a different minute, so each
+enrolled account is checked once every five minutes.
 
 1. Generate one VAPID key pair:
 
@@ -97,27 +97,21 @@ needs the same `WEBTESS_CREDENTIALS_KEY`. Start the scheduler with
 `npm run push:dev`. The scheduler test endpoint is disabled unless
 `ALLOW_TEST_ENDPOINT=true` is explicitly configured.
 
-The reminder time defaults to 18:00 on weekdays and is stored with the browser's
-IANA time zone. The scheduler recalculates today's target at send time from the
-last fetched mark and term end date, so opening the site is not required for the
-notification itself. Fetch grades again whenever the underlying WebTESS mark
-changes so later notifications use the new mark.
-
 ## Realtime Notification Beta
 
-The beta is disabled by default and capped at five invitation slots. After the
-user enables ordinary Web Push, enters a valid invitation code, and confirms
-their WebTESS login, the server stores one AES-GCM encrypted state containing the
-WebTESS email, password, reusable session cookie, and latest grade snapshot. D1
-never stores those fields as plaintext.
+The beta is disabled by default and capped at five invitation slots. Enabling it
+requests browser notification permission automatically. After the user enters a
+valid invitation code and confirms their WebTESS login, the server stores one
+AES-GCM encrypted state containing the WebTESS email, password, reusable session
+cookie, and latest grade snapshot. D1 never stores those fields as plaintext.
 
 Each slot is checked every five minutes, every day from 06:00 until midnight in
 the device's saved IANA time zone. The Worker reuses the WebTESS session cookie
 and falls back to the encrypted password only after that session expires. A
 detected course or assignment change is pushed immediately. Three consecutive
 login or scrape failures pause the beta and notify the device. Disabling the
-beta or ordinary push deletes the encrypted realtime state and releases its
-invitation slot.
+beta deletes both its browser push subscription and encrypted realtime state,
+then releases its invitation slot.
 
 ## Privacy
 

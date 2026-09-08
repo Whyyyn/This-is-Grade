@@ -69,7 +69,7 @@ export async function onRequestPost(context) {
     const subscription = await db.prepare(
       'SELECT device_id FROM push_subscriptions WHERE device_id = ? AND enabled = 1 LIMIT 1'
     ).bind(deviceId).first();
-    if (!subscription) throw Object.assign(new Error('请先启用完整推送通知。'), { status: 409 });
+    if (!subscription) throw Object.assign(new Error('浏览器通知订阅尚未建立，请重新启用即时通知。'), { status: 409 });
 
     let scraped;
     try {
