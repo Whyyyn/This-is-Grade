@@ -34,6 +34,7 @@ const els = {
   averageValue: document.querySelector('#averageValue'),
   averageFormula: document.querySelector('#averageFormula'),
   detailTabs: document.querySelector('#detailTabs'),
+  detailSubjectSelect: document.querySelector('#detailSubjectSelect'),
   gradeRows: document.querySelector('#gradeRows'),
   assignmentChart: document.querySelector('#assignmentChart'),
   refreshButton: document.querySelector('#refreshButton'),
@@ -43,6 +44,15 @@ const els = {
   themeOptions: [...document.querySelectorAll('input[name="theme"]')],
   marketModeOptions: [...document.querySelectorAll('input[name="market-mode"]')],
   effortFeatureToggle: document.querySelector('#effortFeatureToggle'),
+  pushFeatureToggle: document.querySelector('#pushFeatureToggle'),
+  pushControls: document.querySelector('#pushControls'),
+  pushTime: document.querySelector('#pushTime'),
+  pushWeekdaysOnly: document.querySelector('#pushWeekdaysOnly'),
+  pushStatus: document.querySelector('#pushStatus'),
+  realtimeFeatureToggle: document.querySelector('#realtimeFeatureToggle'),
+  realtimeControls: document.querySelector('#realtimeControls'),
+  realtimeInviteCode: document.querySelector('#realtimeInviteCode'),
+  realtimeStatus: document.querySelector('#realtimeStatus'),
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   historyStatus: document.querySelector('#historyStatus'),
@@ -88,6 +98,14 @@ const els = {
 
 const CHANGELOG_API = 'https://api.github.com/repos/Whyyyn/This-is-Grade/commits?sha=main&per_page=100';
 const CHANGELOG_URL = 'https://github.com/Whyyyn/This-is-Grade/commits/main/';
+const PUSH_DEVICE_ID_KEY = 'grade-push-device-id';
+const PUSH_TIME_KEY = 'grade-push-time';
+const PUSH_WEEKDAYS_KEY = 'grade-push-weekdays-only';
+let pushRegistrationPromise = null;
+let pushSyncTimer = null;
+let pushBusy = false;
+let realtimeBusy = false;
+let pushDeviceIdMemory = '';
 let changelogLoaded = false;
 
 applyTheme(loadTheme(), false);
@@ -228,6 +246,339 @@ function updateGrades(grades, options = {}) {
     if (!state.urlPinned.length && options.saveDefaultSelection !== false) savePinnedSubjects();
   }
   render();
+  schedulePushProfileSync();
+}
+
+function pushSupported() {
+  return window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
+function setPushStatus(message, tone = '') {
+  if (!els.pushStatus) return;
+  els.pushStatus.textContent = message;
+  els.pushStatus.dataset.tone = tone;
+}
+
+function setRealtimeStatus(message, tone = '') {
+  if (!els.realtimeStatus) return;
+  els.realtimeStatus.textContent = message;
+  els.realtimeStatus.dataset.tone = tone;
+}
+
+function loadPushPreferences() {
+  let notifyTime = '18:00';
+  let weekdaysOnly = true;
+  try {
+    if (/^\d{2}:\d{2}$/.test(localStorage.getItem(PUSH_TIME_KEY) || '')) {
+      notifyTime = localStorage.getItem(PUSH_TIME_KEY);
+    }
+    weekdaysOnly = localStorage.getItem(PUSH_WEEKDAYS_KEY) !== 'false';
+  } catch {
+    // Defaults remain available in strict privacy modes.
+  }
+  return { notifyTime, weekdaysOnly };
+}
+
+function savePushPreferences() {
+  try {
+    localStorage.setItem(PUSH_TIME_KEY, els.pushTime?.value || '18:00');
+    localStorage.setItem(PUSH_WEEKDAYS_KEY, String(els.pushWeekdaysOnly?.checked !== false));
+  } catch {
+    // The controls still work for the current page.
+  }
+}
+
+function getPushDeviceId(create = false) {
+  if (pushDeviceIdMemory) return pushDeviceIdMemory;
+  try {
+    const saved = localStorage.getItem(PUSH_DEVICE_ID_KEY);
+    if (saved) {
+      pushDeviceIdMemory = saved;
+      return saved;
+    }
+    if (!create) return '';
+    const created = crypto.randomUUID();
+    localStorage.setItem(PUSH_DEVICE_ID_KEY, created);
+    pushDeviceIdMemory = created;
+    return created;
+  } catch {
+    if (create) pushDeviceIdMemory = crypto.randomUUID();
+    return pushDeviceIdMemory;
+  }
+}
+
+function getPushRegistration() {
+  if (!pushRegistrationPromise) pushRegistrationPromise = navigator.serviceWorker.register('/sw.js');
+  return pushRegistrationPromise;
+}
+
+async function initializePushNotifications() {
+  if (!els.pushFeatureToggle) return;
+  const preferences = loadPushPreferences();
+  els.pushTime.value = preferences.notifyTime;
+  els.pushWeekdaysOnly.checked = preferences.weekdaysOnly;
+  if (!pushSupported()) {
+    els.pushFeatureToggle.disabled = true;
+    els.pushControls.hidden = false;
+    els.pushTime.disabled = true;
+    els.pushWeekdaysOnly.disabled = true;
+    setPushStatus('此浏览器不支持后台推送。', 'bad');
+    return;
+  }
+  try {
+    const registration = await getPushRegistration();
+    const subscription = await registration.pushManager.getSubscription();
+    const enabled = Boolean(subscription);
+    els.pushFeatureToggle.checked = enabled;
+    els.pushControls.hidden = !enabled;
+    setPushStatus(enabled ? '推送已启用；分数以最近一次抓取为准。' : '默认关闭', enabled ? 'ok' : '');
+    if (enabled) schedulePushProfileSync(0);
+  } catch {
+    els.pushFeatureToggle.disabled = true;
+    setPushStatus('无法注册后台推送服务。', 'bad');
+  }
+}
+
+async function initializeRealtimeBeta() {
+  if (!els.realtimeFeatureToggle) return;
+  const deviceId = getPushDeviceId(false);
+  try {
+    const query = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
+    const response = await fetch(`/api/realtime${query}`, { credentials: 'same-origin' });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || '无法读取即时通知状态。');
+    if (!result.configured) {
+      els.realtimeFeatureToggle.disabled = true;
+      els.realtimeControls.hidden = false;
+      setRealtimeStatus('服务器尚未配置即时通知密钥。', 'bad');
+      return;
+    }
+    els.realtimeFeatureToggle.checked = result.enabled === true;
+    els.realtimeControls.hidden = !result.enrolled;
+    if (result.enabled) {
+      setRealtimeStatus(`已启用 · Beta ${result.slot}/5 · 每天 06:00–24:00`, 'ok');
+    } else if (result.enrolled) {
+      setRealtimeStatus('后台检查已暂停；重新输入 WebTESS 登录资料即可恢复。', 'bad');
+    } else {
+      setRealtimeStatus('默认关闭');
+    }
+  } catch (error) {
+    els.realtimeFeatureToggle.disabled = true;
+    els.realtimeControls.hidden = false;
+    setRealtimeStatus(error.message || '无法读取即时通知状态。', 'bad');
+  }
+}
+
+async function enablePushNotifications() {
+  if (pushBusy) return false;
+  pushBusy = true;
+  els.pushFeatureToggle.disabled = true;
+  setPushStatus('正在请求通知权限…');
+  let newSubscription = null;
+  try {
+    const configResponse = await fetch('/api/push', { credentials: 'same-origin' });
+    const config = await configResponse.json();
+    if (!configResponse.ok || !config.configured || !config.publicKey) {
+      throw new Error('服务器尚未配置推送密钥。');
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') throw new Error('没有获得通知权限。请在浏览器设置中允许通知。');
+
+    const registration = await getPushRegistration();
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlToBytes(config.publicKey)
+      });
+      newSubscription = subscription;
+    }
+    await savePushProfile(subscription);
+    els.pushFeatureToggle.checked = true;
+    els.pushControls.hidden = false;
+    setPushStatus('推送已启用；关闭网页后仍会按时提醒。', 'ok');
+    return true;
+  } catch (error) {
+    if (newSubscription) await newSubscription.unsubscribe().catch(() => {});
+    els.pushFeatureToggle.checked = false;
+    els.pushControls.hidden = false;
+    setPushStatus(error.message || '启用推送失败。', 'bad');
+    return false;
+  } finally {
+    pushBusy = false;
+    els.pushFeatureToggle.disabled = false;
+  }
+}
+
+async function enableRealtimeBeta() {
+  if (realtimeBusy) return;
+  realtimeBusy = true;
+  els.realtimeFeatureToggle.disabled = true;
+  els.realtimeControls.hidden = false;
+  setRealtimeStatus('正在验证邀请码和 WebTESS 登录…');
+  try {
+    const email = els.email.value.trim();
+    const password = normalizePasswordForHistory(els.password.value);
+    if (!email || !password) throw new Error('请先在首页填写 WebTESS 邮箱和密码。');
+    if (!els.pushFeatureToggle.checked) {
+      const enabled = await enablePushNotifications();
+      if (!enabled) throw new Error('请先允许完整推送通知。');
+    }
+    const response = await fetch('/api/realtime', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: getPushDeviceId(true),
+        inviteCode: els.realtimeInviteCode?.value || '',
+        email,
+        password,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+      })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || '即时通知启用失败。');
+    els.realtimeFeatureToggle.checked = true;
+    if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
+    setRealtimeStatus(`已启用 · Beta ${result.slot}/5 · 每天 06:00–24:00`, 'ok');
+  } catch (error) {
+    els.realtimeFeatureToggle.checked = false;
+    setRealtimeStatus(error.message || '即时通知启用失败。', 'bad');
+  } finally {
+    realtimeBusy = false;
+    els.realtimeFeatureToggle.disabled = false;
+  }
+}
+
+async function disableRealtimeBeta() {
+  if (realtimeBusy) return;
+  realtimeBusy = true;
+  els.realtimeFeatureToggle.disabled = true;
+  setRealtimeStatus('正在关闭并删除后台登录资料…');
+  try {
+    const deviceId = getPushDeviceId(false);
+    if (deviceId) {
+      const response = await fetch('/api/realtime', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || '关闭即时通知失败。');
+    }
+    els.realtimeFeatureToggle.checked = false;
+    els.realtimeControls.hidden = true;
+    if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
+    setRealtimeStatus('即时通知已关闭，服务器端登录资料已删除。');
+  } catch (error) {
+    els.realtimeFeatureToggle.checked = true;
+    setRealtimeStatus(error.message || '关闭即时通知失败。', 'bad');
+  } finally {
+    realtimeBusy = false;
+    els.realtimeFeatureToggle.disabled = false;
+  }
+}
+
+async function disablePushNotifications() {
+  if (pushBusy) return;
+  pushBusy = true;
+  els.pushFeatureToggle.disabled = true;
+  setPushStatus('正在关闭推送…');
+  try {
+    const registration = await getPushRegistration();
+    const subscription = await registration.pushManager.getSubscription();
+    const deviceId = getPushDeviceId(false);
+    if (deviceId) {
+      await fetch('/api/push', {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId })
+      }).catch(() => null);
+    }
+    if (subscription) await subscription.unsubscribe();
+    try { localStorage.removeItem(PUSH_DEVICE_ID_KEY); } catch {}
+    pushDeviceIdMemory = '';
+    els.pushFeatureToggle.checked = false;
+    els.pushControls.hidden = true;
+    if (els.realtimeFeatureToggle) els.realtimeFeatureToggle.checked = false;
+    if (els.realtimeControls) els.realtimeControls.hidden = true;
+    setRealtimeStatus('完整推送已关闭，即时通知登录资料也已删除。');
+    setPushStatus('推送已关闭。');
+  } catch (error) {
+    els.pushFeatureToggle.checked = true;
+    setPushStatus(error.message || '关闭推送失败。', 'bad');
+  } finally {
+    pushBusy = false;
+    els.pushFeatureToggle.disabled = false;
+  }
+}
+
+function schedulePushProfileSync(delay = 300) {
+  clearTimeout(pushSyncTimer);
+  pushSyncTimer = setTimeout(() => syncPushProfile(), delay);
+}
+
+async function syncPushProfile() {
+  if (!pushSupported() || !els.pushFeatureToggle?.checked || state.effortIsDemo) return;
+  try {
+    const registration = await getPushRegistration();
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return;
+    await savePushProfile(subscription);
+    setPushStatus('推送设置已同步；分数以最近一次抓取为准。', 'ok');
+  } catch (error) {
+    setPushStatus(error.message || '推送设置同步失败。', 'bad');
+  }
+}
+
+async function savePushProfile(subscription) {
+  const notifyTime = els.pushTime?.value || '18:00';
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(notifyTime) || Number(notifyTime.slice(3)) % 5 !== 0) {
+    throw new Error('提醒时间需要精确到 5 分钟。');
+  }
+  savePushPreferences();
+  const payload = {
+    deviceId: getPushDeviceId(true),
+    subscription: subscription.toJSON(),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    notifyTime,
+    weekdaysOnly: els.pushWeekdaysOnly?.checked !== false
+  };
+  if (state.grades.length && !state.effortIsDemo) payload.progress = buildPushProgressSnapshot();
+  const response = await fetch('/api/push', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || '推送设置保存失败。');
+}
+
+function buildPushProgressSnapshot() {
+  const endDate = els.effortEndDate?.value || loadEffortEndDate();
+  return state.grades.flatMap((grade) => {
+    const assignment = grade.assignments.find(isEffortColumn);
+    if (!assignment) return [];
+    const progress = calculateEffortProgress(endDate, assignment.scorePercent);
+    if (!progress) return [];
+    return [{
+      subject: grade.subject,
+      source: assignment.category || assignment.title || 'Core Competency',
+      endDate,
+      current: roundHundredths(progress.currentMark),
+      expected: roundHundredths(progress.expectedMark),
+      difference: roundHundredths(progress.difference)
+    }];
+  });
+}
+
+function base64UrlToBytes(value) {
+  const padding = '='.repeat((4 - value.length % 4) % 4);
+  const binary = atob((value + padding).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 function resolvePinnedSubjects(subjects, grades) {
@@ -413,8 +764,8 @@ function renderEffortProgress() {
   const current = roundHundredths(progress.currentMark);
   const expected = roundHundredths(progress.expectedMark);
   const expectedGain = roundHundredths(progress.expectedGain);
-  els.effortCurrentValue.textContent = current + ' / 100';
-  els.effortExpectedValue.textContent = expected + ' / 100';
+  els.effortCurrentValue.textContent = String(current);
+  els.effortExpectedValue.textContent = String(expected);
   els.effortTimeValue.textContent = progress.complete ? '已到期' : progress.calendarDaysLeft + ' 天';
   els.effortCurrentBar.style.width = current + '%';
   els.effortExpectedBar.style.width = expected + '%';
@@ -638,6 +989,7 @@ function updateDetailTabSelection() {
     button.dataset.active = String(active);
     button.setAttribute('aria-pressed', active ? 'true' : 'false');
   }
+  if (els.detailSubjectSelect) els.detailSubjectSelect.value = state.detailSubject;
 }
 
 function renderAverage() {
@@ -658,6 +1010,10 @@ function renderDetailTabs() {
   if (!els.detailTabs) return;
   els.detailTabs.innerHTML = '';
   const selectedGrades = getSelectedGrades();
+  if (els.detailSubjectSelect) {
+    els.detailSubjectSelect.innerHTML = '';
+    els.detailSubjectSelect.disabled = !selectedGrades.length;
+  }
   els.detailTabs.style.setProperty('--detail-count', String(Math.max(selectedGrades.length, 1)));
   if (!selectedGrades.length) {
     els.detailTabs.style.setProperty('--detail-index', '0');
@@ -665,6 +1021,12 @@ function renderDetailTabs() {
     empty.className = 'muted inline-empty';
     empty.textContent = '左侧选择展示的科目后，这里会出现四个切换标签。';
     els.detailTabs.append(empty);
+    if (els.detailSubjectSelect) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = '抓取成绩后选择';
+      els.detailSubjectSelect.append(option);
+    }
     return;
   }
   const activeIndex = Math.max(0, selectedGrades.findIndex((grade) => grade.subject === state.detailSubject));
@@ -681,6 +1043,14 @@ function renderDetailTabs() {
     button.addEventListener('focus', () => setDetailSubject(grade.subject));
     button.addEventListener('click', () => setDetailSubject(grade.subject));
     els.detailTabs.append(button);
+
+    if (els.detailSubjectSelect) {
+      const option = document.createElement('option');
+      option.value = grade.subject;
+      option.textContent = grade.subject + ' · ' + roundCourseScore(grade.score);
+      option.selected = grade.subject === state.detailSubject;
+      els.detailSubjectSelect.append(option);
+    }
   }
 }
 
@@ -1803,7 +2173,8 @@ els.form.addEventListener('submit', async (event) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email,
-        password
+        password,
+        realtimeDeviceId: els.realtimeFeatureToggle?.checked ? getPushDeviceId(false) : ''
       })
     });
     const data = await response.json();
@@ -1829,6 +2200,9 @@ els.predictionCourse?.addEventListener('change', () => {
   state.predictionCategory = '';
   render();
 });
+els.detailSubjectSelect?.addEventListener('change', () => {
+  setDetailSubject(els.detailSubjectSelect.value);
+});
 els.predictionCategory?.addEventListener('change', () => {
   state.predictionCategory = els.predictionCategory.value;
   renderPrediction();
@@ -1841,6 +2215,7 @@ els.effortEndDate?.addEventListener('change', () => {
     // The selected date still works for the current page.
   }
   renderEffortProgress();
+  schedulePushProfileSync();
 });
 els.historySubjectSelect?.addEventListener('change', () => {
   state.historySubject = els.historySubjectSelect.value;
@@ -1865,6 +2240,22 @@ for (const option of els.marketModeOptions) {
 els.effortFeatureToggle?.addEventListener('change', () => {
   applyEffortFeatureEnabled(els.effortFeatureToggle.checked);
   renderEffortProgress();
+});
+els.pushFeatureToggle?.addEventListener('change', () => {
+  if (els.pushFeatureToggle.checked) enablePushNotifications();
+  else disablePushNotifications();
+});
+els.realtimeFeatureToggle?.addEventListener('change', () => {
+  if (els.realtimeFeatureToggle.checked) enableRealtimeBeta();
+  else disableRealtimeBeta();
+});
+els.pushTime?.addEventListener('change', () => {
+  savePushPreferences();
+  schedulePushProfileSync(0);
+});
+els.pushWeekdaysOnly?.addEventListener('change', () => {
+  savePushPreferences();
+  schedulePushProfileSync(0);
 });
 els.loadExampleHistoryButton?.addEventListener('click', () => {
   renderHistoryChart(createExampleHistory(), { demo: true });
@@ -1964,5 +2355,7 @@ els.changelogCard?.addEventListener('toggle', () => {
 
 setupHumanTranslations();
 loadBrowserCredential();
+initializePushNotifications();
+initializeRealtimeBeta();
 
 render();

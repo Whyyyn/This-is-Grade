@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="This is Grade">
+  <rect width="512" height="512" rx="88" fill="#050505"/>
+  <path d="M96 112h320v64H96zm0 112h224v64H96zm0 112h144v64H96z" fill="#a3ff3f"/>
+  <path d="m326 322 42 42 78-98" fill="none" stroke="#a3ff3f" stroke-linecap="square" stroke-width="38"/>
+</svg>

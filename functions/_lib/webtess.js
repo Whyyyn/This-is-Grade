@@ -10,41 +10,43 @@ const BASE_HEADERS = {
   'Pragma': 'no-cache'
 };
 
-export async function scrapeGrades({ email, password, url = DEFAULT_URL }) {
-  if (!email || !password) throw new Error('Missing WebTESS email or password.');
-  const session = createCookieSession();
+export async function scrapeGrades(options) {
+  const result = await scrapeGradesWithSession(options);
+  return result.grades;
+}
+
+export async function scrapeGradesWithSession({ email, password, sessionCookie = '', url = DEFAULT_URL }) {
+  if (!sessionCookie && (!email || !password)) throw new Error('Missing WebTESS credentials.');
+  const session = createCookieSession(sessionCookie);
+  const parentUrl = normalizeParentUrl(url);
   const loginBody = new URLSearchParams({
-    username: email,
-    password,
+    username: email || '',
+    password: password || '',
     mobileBrowser: '0',
     browserWidth: '0',
     savebutton: 'Click to sign in'
   });
 
-  let parentHtml = '';
-  let courses = [];
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    await session.request(LOGIN_URL, {
-      method: 'POST',
-      body: loginBody,
-      headers: {
-        ...BASE_HEADERS,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://harts.systems',
-        'Referer': 'https://harts.systems/webtess/parent.jsp'
-      }
-    });
+  let courses = sessionCookie ? await fetchCourses(session, parentUrl, 0) : [];
+  let authenticatedWithPassword = false;
 
-    const parentResponse = await session.request(withCacheBust(url || DEFAULT_URL, attempt), {
-      headers: {
-        ...BASE_HEADERS,
-        'Referer': LOGIN_URL
-      }
-    });
-    parentHtml = await parentResponse.text();
-    courses = extractGradebookButtons(parentHtml);
-    if (courses.length) break;
-    await sleep(250 * attempt);
+  if (!courses.length && email && password) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await session.request(LOGIN_URL, {
+        method: 'POST',
+        body: loginBody,
+        headers: {
+          ...BASE_HEADERS,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Origin': 'https://harts.systems',
+          'Referer': 'https://harts.systems/webtess/parent.jsp'
+        }
+      });
+      authenticatedWithPassword = true;
+      courses = await fetchCourses(session, parentUrl, attempt);
+      if (courses.length) break;
+      await sleep(250 * attempt);
+    }
   }
 
   if (!courses.length) {
@@ -56,18 +58,38 @@ export async function scrapeGrades({ email, password, url = DEFAULT_URL }) {
   if (!grades.length) {
     throw new Error('Found WebTESS courses, but gradebook returned no scores.');
   }
-  return dedupeGrades(grades);
+  return {
+    grades: dedupeGrades(grades),
+    sessionCookie: session.cookieHeader(),
+    authenticatedWithPassword
+  };
 }
 
-function createCookieSession() {
+async function fetchCourses(session, url, attempt) {
+  const parentResponse = await session.request(withCacheBust(url || DEFAULT_URL, attempt), {
+    headers: {
+      ...BASE_HEADERS,
+      'Referer': LOGIN_URL
+    }
+  });
+  return extractGradebookButtons(await parentResponse.text());
+}
+
+function createCookieSession(initialCookie = '') {
   const cookies = new Map();
+  importCookieHeader(initialCookie, cookies);
   return {
+    cookieHeader() {
+      return [...cookies.entries()].map(([key, value]) => key + '=' + value).join('; ');
+    },
     async request(input, options = {}) {
+      const target = new URL(input);
+      if (target.origin !== 'https://harts.systems') throw new Error('Unexpected WebTESS request destination.');
       const headers = new Headers(options.headers || {});
       if (cookies.size) {
         headers.set('Cookie', [...cookies.entries()].map(([key, value]) => key + '=' + value).join('; '));
       }
-      const response = await fetch(input, {
+      const response = await fetch(target.href, {
         ...options,
         headers,
         redirect: 'manual'
@@ -76,7 +98,7 @@ function createCookieSession() {
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.get('location');
         if (location) {
-          return this.request(new URL(location, input).href, {
+          return this.request(new URL(location, target).href, {
             method: 'GET',
             headers: options.headers
           });
@@ -85,6 +107,26 @@ function createCookieSession() {
       return response;
     }
   };
+}
+
+function normalizeParentUrl(value) {
+  const url = new URL(value || DEFAULT_URL);
+  if (url.origin !== 'https://harts.systems' || !url.pathname.startsWith('/webtess/')) {
+    throw new Error('Invalid WebTESS URL.');
+  }
+  return url.href;
+}
+
+function importCookieHeader(header, cookies) {
+  for (const part of String(header || '').split(';')) {
+    const index = part.indexOf('=');
+    if (index <= 0) continue;
+    const key = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    if (/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(key) && !/[\r\n;]/.test(value)) {
+      cookies.set(key, value);
+    }
+  }
 }
 
 

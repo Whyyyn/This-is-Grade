@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050505" />
     <title>This is Grade</title>
+    <link rel="icon" href="./assets/grade-icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -82,9 +85,9 @@
             <p id="effortEmpty" class="muted effort-empty">选择科目后，将自动检测并置顶核心素养 / ClassDojo 栏目。</p>
             <div id="effortContent" class="effort-compact-body" hidden>
               <div class="effort-score-cluster">
-                <div class="effort-current-score"><span>当前分数</span><strong id="effortCurrentValue">--</strong></div>
-                <div><span>今日应有</span><strong id="effortExpectedValue">--</strong></div>
-                <div><span>距离结束</span><strong id="effortTimeValue">--</strong></div>
+                <div class="effort-current-score"><strong id="effortCurrentValue">--</strong><span>当前分数</span></div>
+                <div><strong id="effortExpectedValue">--</strong><span>今日应有</span></div>
+                <div><strong id="effortTimeValue">--</strong><span>距离结束</span></div>
               </div>
               <div class="effort-progress-cluster">
                 <div class="effort-bars">
@@ -105,6 +108,12 @@
             </div>
           </section>
           <div id="detailTabs" class="detail-tabs" aria-label="切换显示科目"></div>
+          <label class="detail-select-field">
+            <span>选择科目</span>
+            <select id="detailSubjectSelect" aria-label="选择要显示明细的科目" disabled>
+              <option value="">抓取成绩后选择</option>
+            </select>
+          </label>
           <div class="table-wrap details-wrap">
             <table class="grade-table">
               <colgroup>
@@ -266,6 +275,39 @@
               <small>在成绩明细中显示 ClassDojo 当前分数、今日目标和学期进度。</small>
             </span>
           </label>
+          <label class="feature-toggle push-feature-toggle">
+            <input id="pushFeatureToggle" type="checkbox" />
+            <span>
+              <strong>完整推送通知</strong>
+              <small>网页关闭后仍可按时提醒；此项本身只保存推送地址、提醒设置和最近一次核心素养分数。</small>
+            </span>
+          </label>
+          <div id="pushControls" class="push-controls" hidden>
+            <label>
+              <span>提醒时间</span>
+              <input id="pushTime" type="time" value="18:00" step="300" />
+            </label>
+            <label class="push-weekday-toggle">
+              <input id="pushWeekdaysOnly" type="checkbox" checked />
+              <span>仅周一至周五</span>
+            </label>
+            <p id="pushStatus" class="settings-note push-status" role="status">等待启用</p>
+          </div>
+          <label class="feature-toggle realtime-feature-toggle">
+            <input id="realtimeFeatureToggle" type="checkbox" />
+            <span>
+              <strong>即时成绩通知 · 邀请 Beta</strong>
+              <small>限 5 人；每天 06:00–24:00 每 5 分钟检查。服务器会加密保存 WebTESS 登录资料，成绩变化后立即推送。</small>
+            </span>
+          </label>
+          <div id="realtimeControls" class="push-controls realtime-controls" hidden>
+            <label>
+              <span>邀请码</span>
+              <input id="realtimeInviteCode" type="password" autocomplete="off" placeholder="输入 Beta 邀请码" />
+            </label>
+            <p class="settings-note realtime-note">启用前，请先在首页 WebTESS 登录框中填写邮箱和密码，并打开“完整推送通知”。</p>
+            <p id="realtimeStatus" class="settings-note push-status" role="status">默认关闭</p>
+          </div>
         </fieldset>
         <fieldset class="developer-fieldset">
           <legend>开发者工具</legend>
