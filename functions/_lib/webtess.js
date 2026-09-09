@@ -54,9 +54,9 @@ export async function scrapeGradesWithSession({ email, password, sessionCookie =
   }
 
   const results = await Promise.all(courses.map((course) => fetchCourseGrade(session, course)));
-  const grades = results.filter((result) => result.score !== null);
+  const grades = results.filter((result) => result.score !== null || result.assignments.length);
   if (!grades.length) {
-    throw new Error('Found WebTESS courses, but gradebook returned no scores.');
+    throw new Error('Found WebTESS courses, but gradebook returned no published marks.');
   }
   return {
     grades: dedupeGrades(grades),
@@ -194,9 +194,6 @@ async function fetchCourseGrade(session, course) {
   });
   const text = await response.text();
   const parsed = parseGradebookSummary(text);
-  if (parsed.score === null) {
-    return { subject: course.subject, score: null, assignments: [], source: 'gradebook' };
-  }
   return {
     subject: parsed.subject || course.subject,
     score: parsed.score,
@@ -206,19 +203,54 @@ async function fetchCourseGrade(session, course) {
 }
 
 export function parseGradebookSummary(text) {
-  const cleaned = cleanHtml(text);
-  const mainSpreadsheet = cleaned.match(/^\s*\S+\s+(.+?)\s+\d+\s+Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)/i);
-  if (mainSpreadsheet) {
-    const score = normalizeScore(mainSpreadsheet[2]);
-    if (score !== null) {
-      return {
-        subject: mainSpreadsheet[1].trim(),
-        score,
-        assignments: parseAssignmentItems(text, cleaned.slice(mainSpreadsheet.index + mainSpreadsheet[0].length))
-      };
+  const assignments = parseAssignmentItems(text);
+  const tableSummary = parseGradebookTableSummary(text);
+  if (tableSummary) return { ...tableSummary, assignments };
+
+  const legacySummary = parseLegacyGradebookSummary(text);
+  if (legacySummary) return { ...legacySummary, assignments };
+
+  return { subject: '', score: parseExplicitGradebookScore(text), assignments };
+}
+
+function parseGradebookTableSummary(html) {
+  const rows = [...String(html).matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
+  let columns = null;
+
+  for (const row of rows) {
+    const cells = [...row[1].matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)]
+      .map((cell) => cleanHtml(cell[1]));
+    if (!cells.length) continue;
+
+    const normalized = cells.map((cell) => cell.toLowerCase().replace(/\s+/g, ' ').trim());
+    if (!columns) {
+      const title = normalized.findIndex((cell) => cell === 'title');
+      const column = normalized.findIndex((cell) => cell === 'column');
+      const mark = normalized.findIndex((cell) => cell === 'mark');
+      const percent = normalized.findIndex((cell) => cell === 'percent');
+      if ([title, column, mark, percent].every((index) => index >= 0)) columns = { title, column, mark, percent };
+      continue;
     }
+
+    if (normalized[columns.column] !== 'average') continue;
+    const rawSubject = cells[columns.title]?.trim() || '';
+    const subject = /^main spreadsheet$/i.test(rawSubject) ? '' : rawSubject;
+    const score = normalizeScore(parseNumber(cells[columns.mark]) ?? parsePercent(cells[columns.percent]));
+    return { subject, score };
   }
-  return { subject: '', score: parseGradebookScore(text), assignments: [] };
+
+  return null;
+}
+
+function parseLegacyGradebookSummary(text) {
+  for (const row of String(text).split(/\r\n|\n|\r/)) {
+    const cleaned = cleanHtml(row);
+    const match = cleaned.match(/^\s*\S+\s+(.+?)\s+\d+\s+Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)(?:\s|$)/i);
+    if (!match) continue;
+    const score = normalizeScore(match[2]);
+    if (score !== null) return { subject: match[1].trim(), score };
+  }
+  return null;
 }
 
 function parseAssignmentItems(html, legacyText = cleanHtml(html)) {
@@ -390,13 +422,11 @@ function parseNumber(value) {
   return /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null;
 }
 
-function parseGradebookScore(text) {
+function parseExplicitGradebookScore(text) {
   const patterns = [
     /<stavg>\s*([\d.]+)\s*<\/stavg>/i,
     /<avg>\s*([\d.]+)\s*<\/avg>/i,
-    /<average>\s*([\d.]+)\s*<\/average>/i,
-    /Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)/i,
-    /(?:stavg|average|avg|score|mark)["'\s:=]+([\d.]+)/i
+    /<average>\s*([\d.]+)\s*<\/average>/i
   ];
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -409,6 +439,7 @@ function parseGradebookScore(text) {
 }
 
 function normalizeScore(value) {
+  if (value === null || value === undefined || value === '') return null;
   const score = Number(value);
   return Number.isFinite(score) && score >= 0 && score <= 120 ? score : null;
 }

@@ -64,3 +64,23 @@ test('detects course and assignment score changes and builds a concise push', ()
   assert.match(payload.body, /80% → 82%/);
   assert.match(payload.body, /32% → 36%/);
 });
+
+test('keeps assignment-only courses while their overall average is unpublished', () => {
+  const previous = compactGradeSnapshot([{
+    subject: 'English Studies 12',
+    score: null,
+    assignments: [{ id: 'quiz-1', category: 'Olympians Quiz', scorePercent: 100 }]
+  }]);
+  const current = compactGradeSnapshot([{
+    subject: 'English Studies 12',
+    score: null,
+    assignments: [
+      { id: 'quiz-1', category: 'Olympians Quiz', scorePercent: 100 },
+      { id: 'week-1', category: 'Week 1', scorePercent: 100 }
+    ]
+  }]);
+
+  assert.equal(previous.length, 1);
+  assert.equal(previous[0].score, null);
+  assert.equal(diffGradeSnapshots(previous, current).at(0)?.type, 'assignment-added');
+});

@@ -112,8 +112,12 @@ function roundCourseScore(value) {
   return Math.round(Number(value) + Number.EPSILON);
 }
 
+function formatCourseScore(value) {
+  return Number.isFinite(value) ? String(roundCourseScore(value)) : '暂无总评';
+}
+
 function averageDetails(values) {
-  if (values.length !== 4) return null;
+  if (values.length !== 4 || values.some((value) => !Number.isFinite(value))) return null;
   const roundedScores = values.map(roundCourseScore);
   const rawAverage = values.reduce((sum, value) => sum + Number(value), 0) / values.length;
   const roundedAverageValue = Math.round(roundedScores.reduce((sum, value) => sum + value, 0) / roundedScores.length);
@@ -225,11 +229,14 @@ function updateGrades(grades, options = {}) {
   state.grades = grades
     .map((grade) => ({
       subject: String(grade.subject || '').trim(),
-      score: Number(grade.score),
+      score: numericOrNull(grade.score),
       assignments: normalizeAssignments(grade.assignments || [])
     }))
-    .filter((grade) => grade.subject && Number.isFinite(grade.score))
-    .sort((a, b) => b.score - a.score);
+    .filter((grade) => grade.subject && (grade.score !== null || grade.assignments.length))
+    .sort((a, b) => {
+      if (Number.isFinite(a.score) !== Number.isFinite(b.score)) return Number.isFinite(a.score) ? -1 : 1;
+      return Number.isFinite(a.score) ? b.score - a.score : a.subject.localeCompare(b.subject);
+    });
   state.urlPinned = loadUrlPinnedSubjects();
   const preferredSubjects = state.urlPinned.length ? state.urlPinned : [...state.selected];
   state.selected = new Set(resolvePinnedSubjects(preferredSubjects, state.grades).slice(0, 4));
@@ -484,6 +491,7 @@ function normalizeAssignments(assignments) {
 }
 
 function numericOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -802,8 +810,8 @@ function renderPicker() {
     button.className = 'subject-chip';
     button.dataset.active = selected;
     button.setAttribute('aria-pressed', selected ? 'true' : 'false');
-    button.setAttribute('aria-label', `${selected ? '已选' : '未选'} · ${grade.subject} ${roundCourseScore(grade.score)}`);
-    button.textContent = `${grade.subject} ${roundCourseScore(grade.score)}`;
+    button.setAttribute('aria-label', `${selected ? '已选' : '未选'} · ${grade.subject} ${formatCourseScore(grade.score)}`);
+    button.textContent = `${grade.subject} ${formatCourseScore(grade.score)}`;
     button.addEventListener('click', () => toggleSubject(grade.subject));
     els.subjectPicker.append(button);
   }
@@ -862,7 +870,11 @@ function renderAverage() {
   const details = averageDetails(selectedGrades.map((grade) => grade.score));
   if (!details) {
     els.averageValue.textContent = '--';
-    els.averageFormula.textContent = selectedGrades.length ? '还需要选择四科' : '选择四科后计算';
+    els.averageFormula.textContent = !selectedGrades.length
+      ? '选择四科后计算'
+      : selectedGrades.length < 4
+        ? '还需要选择四科'
+        : '所选科目中有尚未发布的总评';
     return;
   }
   const rounded = selectedGrades.map((grade) => grade.subject + ' ' + roundCourseScore(grade.score));
@@ -901,7 +913,7 @@ function renderDetailTabs() {
     button.className = 'detail-tab';
     button.dataset.index = String(index);
     button.dataset.active = grade.subject === state.detailSubject;
-    button.textContent = grade.subject + ' · ' + roundCourseScore(grade.score);
+    button.textContent = grade.subject + ' · ' + formatCourseScore(grade.score);
     button.setAttribute('aria-pressed', grade.subject === state.detailSubject ? 'true' : 'false');
     button.addEventListener('mouseenter', () => setDetailSubject(grade.subject));
     button.addEventListener('focus', () => setDetailSubject(grade.subject));
@@ -911,7 +923,7 @@ function renderDetailTabs() {
     if (els.detailSubjectSelect) {
       const option = document.createElement('option');
       option.value = grade.subject;
-      option.textContent = grade.subject + ' · ' + roundCourseScore(grade.score);
+      option.textContent = grade.subject + ' · ' + formatCourseScore(grade.score);
       option.selected = grade.subject === state.detailSubject;
       els.detailSubjectSelect.append(option);
     }
@@ -951,6 +963,12 @@ function renderPrediction() {
   if (!els.predictedCourse) return;
   const grade = getPredictionGrade();
   const newScore = Number(els.predictionScore?.value || 100);
+  if (grade && !Number.isFinite(grade.score)) {
+    els.predictedCourse.textContent = '--';
+    els.predictedAverage.textContent = '--';
+    els.predictionDelta.textContent = '课程总评尚未发布，暂时无法预测整科分数';
+    return;
+  }
   const prediction = predictCourseScore(grade, state.predictionCategory, newScore);
   if (!grade || !prediction) {
     els.predictedCourse.textContent = '--';
@@ -989,7 +1007,7 @@ function getCategories(grade) {
 }
 
 function predictCourseScore(grade, categoryKey, newScore) {
-  if (!grade || !Number.isFinite(newScore)) return null;
+  if (!grade || !Number.isFinite(grade.score) || !Number.isFinite(newScore)) return null;
   const category = getCategories(grade).find((item) => item.key === categoryKey);
   if (!category || !category.items.length) return null;
   const currentAverage = category.items.reduce((sum, item) => sum + item.scorePercent, 0) / category.items.length;
@@ -1414,7 +1432,7 @@ function createHistorySnapshot() {
     capturedAt: new Date().toISOString(),
     grades: state.grades.map((grade) => ({
       subject: grade.subject,
-      score: roundHundredths(grade.score),
+      score: Number.isFinite(grade.score) ? roundHundredths(grade.score) : null,
       assignments: grade.assignments.map((item) => ({
         category: item.category,
         title: item.title,
@@ -1432,7 +1450,7 @@ function sanitizeSnapshot(snapshot) {
     capturedAt: String(snapshot?.capturedAt || new Date().toISOString()),
     grades: Array.isArray(snapshot?.grades) ? snapshot.grades.map((grade) => ({
       subject: String(grade.subject || '').trim(),
-      score: Number(grade.score),
+      score: numericOrNull(grade.score),
       assignments: Array.isArray(grade.assignments) ? grade.assignments.map((item) => ({
         category: String(item.category || '').trim() || String(item.title || '').trim() || '未命名作业',
         title: String(item.title || '').trim(),
@@ -1441,7 +1459,7 @@ function sanitizeSnapshot(snapshot) {
         scorePercent: Number(item.scorePercent),
         itemWeight: Number(item.itemWeight) || 0
       })).filter((item) => Number.isFinite(item.scorePercent)) : []
-    })).filter((grade) => grade.subject && Number.isFinite(grade.score)) : []
+    })).filter((grade) => grade.subject && (grade.score !== null || grade.assignments.length)) : []
   };
 }
 
@@ -1478,7 +1496,7 @@ function hasSnapshotGradeChanges(oldSnapshot, newSnapshot) {
   for (const [subject, newCourse] of newCourses) {
     const oldCourse = oldCourses.get(subject);
     if (!oldCourse) return true;
-    if (Math.abs((newCourse.score || 0) - (oldCourse.score || 0)) >= 0.01) return true;
+    if (valueChanged(newCourse.score, oldCourse.score)) return true;
     const oldAssignments = new Map(oldCourse.assignments.map((item) => [assignmentKey(item), item]));
     const newAssignments = new Map(newCourse.assignments.map((item) => [assignmentKey(item), item]));
     if (oldAssignments.size !== newAssignments.size) return true;
@@ -1565,7 +1583,7 @@ function revealText(change) {
   if (change.type === 'deleted-assignment' && change.oldItem) {
     pieces.push('删去成绩：' + roundHundredths(change.oldItem.scorePercent) + '%，权重 ' + roundHundredths(change.oldItem.itemWeight) + '%，得分 ' + formatSnapshotPoints(change.oldItem));
   }
-  pieces.push('科目总分 ' + roundHundredths(change.oldCourse.score) + '% -> ' + roundHundredths(change.newCourse.score) + '%');
+  pieces.push('科目总分 ' + formatSnapshotScore(change.oldCourse.score) + ' -> ' + formatSnapshotScore(change.newCourse.score));
   if (change.oldAverage && change.newAverage) {
     pieces.push('四科均分 ' + change.oldAverage.rounded + ' -> ' + change.newAverage.rounded + '，未四舍五入 ' + roundHundredths(change.oldAverage.raw) + ' -> ' + roundHundredths(change.newAverage.raw));
   }
@@ -1583,6 +1601,10 @@ function formatSnapshotPoints(item) {
   if (item.earned !== null && item.possible !== null) return roundHundredths(item.earned) + ' / ' + roundHundredths(item.possible);
   if (item.earned !== null) return String(roundHundredths(item.earned));
   return '--';
+}
+
+function formatSnapshotScore(value) {
+  return Number.isFinite(value) ? roundHundredths(value) + '%' : '暂无总评';
 }
 
 function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
@@ -1612,7 +1634,7 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
   const points = [];
   for (const snapshot of snapshots) {
     const grade = snapshot.grades.find((item) => item.subject === subject);
-    if (!grade) continue;
+    if (!grade || !Number.isFinite(grade.score)) continue;
     const previousPoint = points.at(-1);
     if (!previousPoint || Math.abs(grade.score - previousPoint.score) >= 0.01) {
       points.push({ snapshot, score: grade.score });
@@ -1701,7 +1723,7 @@ function historySubjects(snapshots) {
   const newestFirst = [...snapshots].reverse();
   for (const snapshot of newestFirst) {
     for (const grade of snapshot.grades) {
-      if (!subjects.includes(grade.subject)) subjects.push(grade.subject);
+      if (Number.isFinite(grade.score) && !subjects.includes(grade.subject)) subjects.push(grade.subject);
     }
   }
   return subjects;

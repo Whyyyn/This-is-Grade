@@ -47,7 +47,7 @@ export function resolveInviteSlot(value, configuredCodes) {
 export function compactGradeSnapshot(grades) {
   return (Array.isArray(grades) ? grades : []).slice(0, 16).map((grade) => ({
     subject: String(grade?.subject || '').trim().slice(0, 100),
-    score: roundedNumber(grade?.score),
+    score: nullableRoundedNumber(grade?.score),
     assignments: (Array.isArray(grade?.assignments) ? grade.assignments : []).slice(0, 80).map((item) => ({
       id: String(item?.id || '').slice(0, 100),
       categoryId: String(item?.categoryId || '').slice(0, 100),
@@ -57,7 +57,7 @@ export function compactGradeSnapshot(grades) {
       possible: nullableRoundedNumber(item?.possible),
       scorePercent: roundedNumber(item?.scorePercent)
     }))
-  })).filter((grade) => grade.subject && grade.score !== null);
+  })).filter((grade) => grade.subject && (grade.score !== null || grade.assignments.length));
 }
 
 export function diffGradeSnapshots(previous, current) {
