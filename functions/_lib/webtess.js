@@ -251,11 +251,15 @@ function parseGradebookTableSummary(html) {
 function parseLegacyGradebookSummary(text) {
   const summary = String(text).split(/<pubmark>/i, 1)[0];
   const cleaned = cleanHtml(summary);
-  const match = cleaned.match(/^\s*\S+\s+(.+?)\s+\d+\s+Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)(?:\s|$)/i);
-  if (!match) return null;
+  const mainSpreadsheet = cleaned.match(/^\s*\S+\s+(.+?)\s+\d+\s+Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)(?:\s|$)/i);
+  if (mainSpreadsheet) {
+    const score = normalizeScore(mainSpreadsheet[2]);
+    if (score !== null) return { subject: mainSpreadsheet[1].trim(), score };
+  }
 
-  const score = normalizeScore(match[2]);
-  if (score !== null) return { subject: match[1].trim(), score };
+  const trailingAverage = cleaned.match(/(?:^|\s)(\d{1,3}(?:\.\d+)?)\s*$/);
+  const score = normalizeScore(trailingAverage?.[1]);
+  if (score !== null) return { subject: '', score };
   return null;
 }
 

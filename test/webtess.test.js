@@ -120,3 +120,25 @@ test('reads a published legacy average split across response lines', () => {
   assert.equal(parsed.score, 91.21);
   assert.equal(parsed.assignments.length, 1);
 });
+
+test('reads legacy averages from custom gradebook names', () => {
+  const fixtures = [
+    ['12008 Economics 12 801 Q1 Gradebook (1st 9 week) 100.00', 100],
+    ['12013 English Studies 12 802 English Studies 12B 100.00', 100]
+  ];
+
+  for (const [summary, expected] of fixtures) {
+    const parsed = parseGradebookSummary(`${summary}\n<pubmark>\t1\t0\t2\t8\t0\t0\t6.67%\t100%\t...\tW1 Reflection\t8`);
+    assert.equal(parsed.score, expected);
+    assert.equal(parsed.assignments.length, 1);
+  }
+});
+
+test('does not invent a legacy average when a custom gradebook total is unpublished', () => {
+  const response = `12014 Comparative Cultures 12 803 Q1 Gradebook (1st 9 week) ---
+<pubmark>\t1\t0\t2\t1\t0\t0\t10%\t100%\t...\tNames, Language and Identitiy\t1`;
+  const parsed = parseGradebookSummary(response);
+
+  assert.equal(parsed.score, null);
+  assert.equal(parsed.assignments.length, 1);
+});
