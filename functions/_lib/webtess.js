@@ -160,12 +160,18 @@ function splitSetCookieHeader(header) {
   return header.split(/,(?=\s*[^;,=\s]+=[^;,]+)/);
 }
 
-function extractGradebookButtons(html) {
+export function extractGradebookButtons(html) {
   const courses = [];
-  const rowPattern = /<tr\b[^>]*>[\s\S]*?getGradebookByStudent\('([^']+)'\)[\s\S]*?<\/tr>/gi;
+  const source = String(html);
+  const lowerSource = source.toLowerCase();
+  const buttonPattern = /getGradebookByStudent\('([^']+)'\)/gi;
   let match;
-  while ((match = rowPattern.exec(html))) {
-    const rowHtml = match[0];
+  while ((match = buttonPattern.exec(source))) {
+    const rowStart = lowerSource.lastIndexOf('<tr', match.index);
+    const rowEnd = lowerSource.indexOf('</tr>', match.index + match[0].length);
+    if (rowStart < 0 || rowEnd < 0) continue;
+
+    const rowHtml = source.slice(rowStart, rowEnd + '</tr>'.length);
     const params = match[1].split(',').map((part) => part.trim());
     if (params.length < 4) continue;
     const cells = [...rowHtml.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cleanHtml(cell[1]));

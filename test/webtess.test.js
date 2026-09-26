@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseGradebookSummary } from '../functions/_lib/webtess.js';
+import { extractGradebookButtons, parseGradebookSummary } from '../functions/_lib/webtess.js';
 
 function gradebookTable(summaryTitle, summaryMark, assignments) {
   const assignmentRows = assignments.map((item) => `
@@ -16,6 +16,33 @@ function gradebookTable(summaryTitle, summaryMark, assignments) {
       ${assignmentRows}
     </table>`;
 }
+
+test('extracts the first course name from its own row inside the parent layout table', () => {
+  const parentPage = `
+    <table>
+      <tr>
+        <td>2027301</td>
+        <td>Canada Qingdao Secondary School</td>
+        <td>
+          <table>
+            <tr>
+              <td><button onclick="getGradebookByStudent('1,2,3,120014')">120014</button></td>
+              <td>Comparative Cultures 12</td><td>12A</td><td>Sydney Bamara</td>
+            </tr>
+            <tr>
+              <td><button onclick="getGradebookByStudent('1,2,4,120008')">120008</button></td>
+              <td>Economics 12</td><td>12D</td><td>Ryan Stotesbury</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
+
+  assert.deepEqual(extractGradebookButtons(parentPage).map((course) => course.subject), [
+    'Comparative Cultures 12',
+    'Economics 12'
+  ]);
+});
 
 test('keeps assignments when a renamed gradebook has no published course average', () => {
   const parsed = parseGradebookSummary(gradebookTable('English Studies 12B', '', [
