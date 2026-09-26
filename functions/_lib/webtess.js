@@ -201,7 +201,7 @@ async function fetchCourseGrade(session, course) {
   const text = await response.text();
   const parsed = parseGradebookSummary(text);
   return {
-    subject: parsed.subject || course.subject,
+    subject: course.subject || parsed.subject,
     score: parsed.score,
     assignments: parsed.assignments,
     source: 'gradebook'
@@ -220,11 +220,11 @@ export function parseGradebookSummary(text) {
 }
 
 function parseGradebookTableSummary(html) {
-  const rows = [...String(html).matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)];
+  const rows = extractLeafTableRows(html);
   let columns = null;
 
   for (const row of rows) {
-    const cells = [...row[1].matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)]
+    const cells = [...row.innerHtml.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)]
       .map((cell) => cleanHtml(cell[1]));
     if (!cells.length) continue;
 
@@ -249,13 +249,13 @@ function parseGradebookTableSummary(html) {
 }
 
 function parseLegacyGradebookSummary(text) {
-  for (const row of String(text).split(/\r\n|\n|\r/)) {
-    const cleaned = cleanHtml(row);
-    const match = cleaned.match(/^\s*\S+\s+(.+?)\s+\d+\s+Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)(?:\s|$)/i);
-    if (!match) continue;
-    const score = normalizeScore(match[2]);
-    if (score !== null) return { subject: match[1].trim(), score };
-  }
+  const summary = String(text).split(/<pubmark>/i, 1)[0];
+  const cleaned = cleanHtml(summary);
+  const match = cleaned.match(/^\s*\S+\s+(.+?)\s+\d+\s+Main spreadsheet\s+(\d{1,3}(?:\.\d+)?)(?:\s|$)/i);
+  if (!match) return null;
+
+  const score = normalizeScore(match[2]);
+  if (score !== null) return { subject: match[1].trim(), score };
   return null;
 }
 
@@ -303,12 +303,12 @@ function cleanPublishedField(value) {
 }
 
 function parseAssignmentTable(html) {
-  const rows = [...String(html).matchAll(/<tr\b([^>]*)>([\s\S]*?)<\/tr>/gi)];
+  const rows = extractLeafTableRows(html);
   let columns = null;
   const items = [];
 
   for (const row of rows) {
-    const cells = [...row[2].matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)]
+    const cells = [...row.innerHtml.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)]
       .map((cell) => cleanHtml(cell[1]));
     if (!cells.length) continue;
 
@@ -335,7 +335,7 @@ function parseAssignmentTable(html) {
     const scorePercent = parsePercent(cells[rowColumns.percent]);
     if (!assignment || !Number.isFinite(itemWeight) || !Number.isFinite(scorePercent)) continue;
 
-    const rowHtml = row[0];
+    const rowHtml = row.html;
     items.push({
       id: extractRowIdentifier(rowHtml, ['assignment', 'item', 'mark']) || String(items.length + 1),
       categoryId: extractRowIdentifier(rowHtml, ['category', 'column', 'group']) || 'unknown',
@@ -350,6 +350,11 @@ function parseAssignmentTable(html) {
   }
 
   return items;
+}
+
+function extractLeafTableRows(html) {
+  return [...String(html).matchAll(/<tr\b([^>]*)>((?:(?!<tr\b)[\s\S])*?)<\/tr>/gi)]
+    .map((row) => ({ html: row[0], attributes: row[1], innerHtml: row[2] }));
 }
 
 function inferAssignmentColumns(cells) {

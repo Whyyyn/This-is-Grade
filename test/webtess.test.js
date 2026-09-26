@@ -77,6 +77,24 @@ test('reads a published average only from the summary row', () => {
   assert.equal(parsed.assignments.length, 1);
 });
 
+test('reads published averages and assignments from a gradebook nested in a layout row', () => {
+  const nestedGradebook = `
+    <table>
+      <tr>
+        <td>Canada Qingdao Secondary School</td>
+        <td>${gradebookTable('Q1 Gradebook (1st 9 week)', '100.00', [
+          { column: 'W1 Reflection', description: '...', weight: '6.67', mark: '8', possible: '8', percent: '100' }
+        ])}</td>
+      </tr>
+    </table>`;
+  const parsed = parseGradebookSummary(nestedGradebook);
+
+  assert.equal(parsed.subject, 'Q1 Gradebook (1st 9 week)');
+  assert.equal(parsed.score, 100);
+  assert.equal(parsed.assignments.length, 1);
+  assert.equal(parsed.assignments[0].category, 'W1 Reflection');
+});
+
 test('legacy summary parsing cannot cross into a following assignment row', () => {
   const blankSummary = '12003 Precalculus 12 999 Main spreadsheet\n<pubmark>\t1\t0\t2\t32\t0\t0\t14.29%\t32%\tDescription\tLearning Behaviours\t100';
   const parsedBlank = parseGradebookSummary(blankSummary);
@@ -87,4 +105,18 @@ test('legacy summary parsing cannot cross into a following assignment row', () =
   const parsedPublished = parseGradebookSummary(publishedSummary);
   assert.equal(parsedPublished.subject, 'Precalculus 12');
   assert.equal(parsedPublished.score, 87.6);
+});
+
+test('reads a published legacy average split across response lines', () => {
+  const response = `12003
+    Precalculus 12
+    999
+    Main spreadsheet
+    91.21
+<pubmark>\t1\t0\t2\t12\t0\t0\t28.57%\t86%\t...\tTranforing Test\t14`;
+  const parsed = parseGradebookSummary(response);
+
+  assert.equal(parsed.subject, 'Precalculus 12');
+  assert.equal(parsed.score, 91.21);
+  assert.equal(parsed.assignments.length, 1);
 });
