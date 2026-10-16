@@ -4,6 +4,7 @@ import {
   isEffortColumn,
   sortEffortColumnsFirst
 } from './effort-progress.js';
+import { getPredictionCategories, predictCourseScore } from './prediction.js';
 
 const state = {
   grades: [],
@@ -945,13 +946,13 @@ function renderPredictionControls() {
   els.predictionCourse.value = state.predictionSubject;
 
   const grade = getPredictionGrade();
-  const categories = getCategories(grade);
+  const categories = getPredictionCategories(grade);
   const currentCategory = els.predictionCategory.value || state.predictionCategory || categories[0]?.key || '';
   els.predictionCategory.innerHTML = '';
   for (const category of categories) {
     const option = document.createElement('option');
     option.value = category.key;
-    option.textContent = category.name + ' (' + roundHundredths(category.weight) + '%)';
+    option.textContent = '每项 ' + category.itemWeight + '% · ' + category.items.length + ' 项（合计 ' + roundHundredths(category.weight) + '%）';
     els.predictionCategory.append(option);
   }
   els.predictionCategory.disabled = !categories.length;
@@ -991,29 +992,6 @@ function renderPrediction() {
 
 function getPredictionGrade() {
   return state.grades.find((grade) => grade.subject === state.predictionSubject) || state.grades[0] || null;
-}
-
-function getCategories(grade) {
-  if (!grade) return [];
-  const groups = new Map();
-  for (const item of grade.assignments || []) {
-    const key = item.categoryId + '|' + item.category;
-    if (!groups.has(key)) groups.set(key, { key, name: item.category, items: [], weight: 0 });
-    const group = groups.get(key);
-    group.items.push(item);
-    group.weight += item.itemWeight;
-  }
-  return [...groups.values()].sort((a, b) => b.weight - a.weight);
-}
-
-function predictCourseScore(grade, categoryKey, newScore) {
-  if (!grade || !Number.isFinite(grade.score) || !Number.isFinite(newScore)) return null;
-  const category = getCategories(grade).find((item) => item.key === categoryKey);
-  if (!category || !category.items.length) return null;
-  const currentAverage = category.items.reduce((sum, item) => sum + item.scorePercent, 0) / category.items.length;
-  const nextAverage = (category.items.reduce((sum, item) => sum + item.scorePercent, 0) + newScore) / (category.items.length + 1);
-  const delta = category.weight * (nextAverage - currentAverage) / 100;
-  return { score: Math.max(0, grade.score + delta), delta, category };
 }
 
 function roundHundredths(value) {
