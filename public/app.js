@@ -5,6 +5,7 @@ import {
   sortEffortColumnsFirst
 } from './effort-progress.js';
 import { getPredictionCategories, predictCourseScore } from './prediction.js';
+import { renderHistoryTooltip } from './history-tooltip.js';
 
 const state = {
   grades: [],
@@ -1671,7 +1672,7 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
     const events = historyEventsForPoint(points, index, subject);
     const pointDelta = index ? point.score - points[index - 1].score : 0;
     const pointTone = pointDelta > 0 ? 'gain' : pointDelta < 0 ? 'loss' : 'flat';
-    const label = `${subject} ${roundHundredths(point.score)}%，${formatHistoryDate(point.snapshot.capturedAt, true)}，${events.join('；')}`;
+    const label = `${subject} ${roundHundredths(point.score)}%，${formatHistoryDate(point.snapshot.capturedAt, true)}，${events.map((event) => event.text).join('；')}`;
     return `<g class="history-event-target" data-point-index="${index}" data-tone="${pointTone}" tabindex="0" role="button" aria-label="${escapeHtml(label)}">
       <rect class="history-event-hitbox" x="${point.x - eventHitWidth / 2}" y="${plot.top}" width="${eventHitWidth}" height="${height - plot.top - plot.bottom}"></rect>
       <line class="history-event-line" x1="${point.x}" y1="${plot.top}" x2="${point.x}" y2="${height - plot.bottom}"></line>
@@ -1745,10 +1746,10 @@ function historyEventsForPoint(points, index, subject) {
   const current = points[index]?.snapshot;
   const previous = points[index - 1]?.snapshot;
   if (!current) return [];
-  if (!previous) return ['建立历史基准'];
+  if (!previous) return [{ type: 'note', text: '建立历史基准' }];
   const currentGrade = current.grades.find((grade) => grade.subject === subject);
   const previousGrade = previous.grades.find((grade) => grade.subject === subject);
-  if (!currentGrade || !previousGrade) return ['科目开始出现在历史记录中'];
+  if (!currentGrade || !previousGrade) return [{ type: 'note', text: '科目开始出现在历史记录中' }];
 
   const events = [];
   const oldAssignments = new Map(previousGrade.assignments.map((item) => [assignmentKey(item), item]));
@@ -1757,17 +1758,17 @@ function historyEventsForPoint(points, index, subject) {
     const oldItem = oldAssignments.get(key);
     const title = historyAssignmentName(item);
     if (!oldItem) {
-      events.push(`新增「${title}」：${roundHundredths(item.scorePercent)}%`);
+      events.push({ type: 'added', title, after: `${roundHundredths(item.scorePercent)}%`, text: `新增「${title}」：${roundHundredths(item.scorePercent)}%` });
       continue;
     }
-    if (valueChanged(item.scorePercent, oldItem.scorePercent)) events.push(`「${title}」改分：${roundHundredths(oldItem.scorePercent)}% → ${roundHundredths(item.scorePercent)}%`);
-    if (valueChanged(item.earned, oldItem.earned) || valueChanged(item.possible, oldItem.possible)) events.push(`「${title}」得分更新：${formatSnapshotPoints(oldItem)} → ${formatSnapshotPoints(item)}`);
-    if (valueChanged(item.itemWeight, oldItem.itemWeight)) events.push(`「${title}」权重更新：${roundHundredths(oldItem.itemWeight)}% → ${roundHundredths(item.itemWeight)}%`);
+    if (valueChanged(item.scorePercent, oldItem.scorePercent)) events.push({ type: 'score', title, before: `${roundHundredths(oldItem.scorePercent)}%`, after: `${roundHundredths(item.scorePercent)}%`, text: `「${title}」改分：${roundHundredths(oldItem.scorePercent)}% → ${roundHundredths(item.scorePercent)}%` });
+    if (valueChanged(item.earned, oldItem.earned) || valueChanged(item.possible, oldItem.possible)) events.push({ type: 'points', title, before: formatSnapshotPoints(oldItem), after: formatSnapshotPoints(item), text: `「${title}」得分更新：${formatSnapshotPoints(oldItem)} → ${formatSnapshotPoints(item)}` });
+    if (valueChanged(item.itemWeight, oldItem.itemWeight)) events.push({ type: 'weight', title, before: `${roundHundredths(oldItem.itemWeight)}%`, after: `${roundHundredths(item.itemWeight)}%`, text: `「${title}」权重更新：${roundHundredths(oldItem.itemWeight)}% → ${roundHundredths(item.itemWeight)}%` });
   }
   for (const [key, item] of oldAssignments) {
-    if (!newAssignments.has(key)) events.push(`移除「${historyAssignmentName(item)}」`);
+    if (!newAssignments.has(key)) events.push({ type: 'removed', title: historyAssignmentName(item), after: `${roundHundredths(item.scorePercent)}%`, text: `移除「${historyAssignmentName(item)}」` });
   }
-  return events.length ? events : ['本次快照没有可识别的作业事件'];
+  return events.length ? events : [{ type: 'note', text: '本次快照没有可识别的作业事件' }];
 }
 
 function historyAssignmentName(item) {
@@ -1784,26 +1785,16 @@ function bindHistoryPointTooltips(points, subject) {
     const tone = deltaValue > 0 ? 'gain' : deltaValue < 0 ? 'loss' : 'flat';
     const events = historyEventsForPoint(points, pointIndex, subject);
     const rect = node.getBoundingClientRect();
-    tooltip.replaceChildren();
     tooltip.dataset.tone = tone;
-    const quote = document.createElement('div');
-    quote.className = 'history-tooltip-quote';
-    const score = document.createElement('strong');
-    score.textContent = `${roundHundredths(point.score)}%`;
-    const delta = document.createElement('span');
-    delta.className = 'history-tooltip-delta';
-    delta.textContent = `${deltaValue === 0 ? '±0' : formatSignedScore(deltaValue)} 点`;
-    quote.append(score, delta);
-    const date = document.createElement('time');
-    date.dateTime = point.snapshot.capturedAt;
-    date.textContent = formatHistoryDate(point.snapshot.capturedAt, true);
-    const list = document.createElement('ul');
-    for (const event of events) {
-      const item = document.createElement('li');
-      item.textContent = event;
-      list.append(item);
-    }
-    tooltip.append(quote, date, list);
+    renderHistoryTooltip(tooltip, {
+      subject,
+      score: point.score,
+      previousScore: previousPoint?.score,
+      capturedAt: point.snapshot.capturedAt,
+      dateLabel: formatHistoryDate(point.snapshot.capturedAt, true),
+      events,
+      onClose: () => hideHistoryTooltip(true)
+    });
     tooltip.style.visibility = 'hidden';
     tooltip.hidden = false;
     tooltip.style.transform = 'none';
@@ -2159,7 +2150,7 @@ document.addEventListener('pointerdown', (event) => {
 });
 window.addEventListener('resize', () => hideHistoryTooltip(true));
 document.addEventListener('scroll', (event) => {
-  if (event.target !== els.historyTooltip) hideHistoryTooltip(true);
+  if (!els.historyTooltip?.contains(event.target)) hideHistoryTooltip(true);
 }, true);
 els.historyTooltip?.addEventListener('pointerenter', cancelHistoryTooltipHide);
 els.historyTooltip?.addEventListener('pointerleave', scheduleHistoryTooltipHide);

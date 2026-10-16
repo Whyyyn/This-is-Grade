@@ -1619,21 +1619,25 @@ tbody tr:nth-child(even) td {
 }
 
 .history-tooltip {
-  --history-event-color: var(--accent);
+  --history-event-color: var(--fg);
   position: fixed;
   z-index: 60;
-  width: min(340px, calc(100vw - 24px));
-  max-height: min(300px, calc(100vh - 36px));
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(620px, calc(100vh - 24px));
+  max-height: min(620px, calc(100dvh - 24px));
+  overflow: hidden;
   border: 1px solid var(--line-strong);
-  padding: 12px 14px;
+  border-radius: 12px;
+  padding: 16px;
   color: var(--fg);
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  box-shadow: 0 16px 46px color-mix(in srgb, #000 44%, transparent);
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  box-shadow: 0 16px 46px color-mix(in srgb, #000 30%, transparent);
+  font-family: var(--ui-font);
+  font-size: 13px;
+  line-height: 1.45;
   pointer-events: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  scrollbar-width: thin;
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
 }
@@ -1650,45 +1654,193 @@ tbody tr:nth-child(even) td {
   display: none;
 }
 
-.history-tooltip time {
-  display: block;
-  margin: 1px 0 10px;
-  color: color-mix(in srgb, var(--fg) 66%, transparent);
-  font-size: 11px;
-}
-
-.history-tooltip-quote {
+.history-tooltip-header {
   display: flex;
-  align-items: baseline;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
 }
 
+.history-tooltip-subject {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.history-tooltip time {
+  display: block;
+  margin-top: 3px;
+  color: color-mix(in srgb, var(--fg) 70%, transparent);
+  font-size: 12px;
+}
+
+.history-tooltip .history-tooltip-close {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin: -4px -4px 0 0;
+  padding: 0;
+  border-color: transparent;
+  color: var(--fg);
+  font: 400 22px/1 var(--ui-font);
+}
+
+.history-tooltip-summary {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin: 14px 0 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-tooltip-quote,
+.history-tooltip-comparison {
+  display: grid;
+  gap: 4px;
+}
+
+.history-tooltip-label,
+.history-tooltip-previous {
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  font-size: 12px;
+}
+
 .history-tooltip-quote strong {
-  color: var(--history-event-color);
-  font-family: var(--title-font);
-  font-size: 38px;
+  color: var(--fg);
+  font-size: 32px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
 }
 
 .history-tooltip-delta {
+  padding: 4px 7px;
+  border-radius: 5px;
   color: var(--history-event-color);
-  font-size: 16px;
-  font-weight: 800;
+  background: color-mix(in srgb, var(--history-event-color) 10%, transparent);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-tooltip-changes {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
+}
+
+.history-change-section {
+  padding: 14px 0 0;
+}
+
+.history-change-section + .history-change-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.history-change-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.history-change-icon {
+  display: grid;
+  flex: 0 0 20px;
+  place-items: center;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--surface);
+  font-size: 15px;
+}
+
+.history-change-count {
+  margin-left: auto;
+  color: color-mix(in srgb, var(--fg) 70%, transparent);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.history-weight-hint {
+  margin: -3px 0 8px;
+  color: color-mix(in srgb, var(--fg) 70%, transparent);
+  font-size: 11px;
+}
+
+#historyTooltip .history-change-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: auto;
+  border: 0;
+  border-collapse: collapse;
+  background: transparent;
+}
+
+#historyTooltip .history-change-table :is(th, td) {
+  border: 0;
+  padding: 7px 0;
+  color: var(--fg);
+  background: transparent;
+  font-family: var(--ui-font);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  vertical-align: top;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+#historyTooltip .history-change-table thead th {
+  padding: 0 0 5px;
+  color: color-mix(in srgb, var(--fg) 65%, transparent);
+  font-size: 11px;
+}
+
+#historyTooltip .history-change-table th:first-child {
+  width: 100%;
+  padding-right: 12px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+#historyTooltip .history-change-table :is(td, thead th:not(:first-child)) {
+  padding-left: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.history-tooltip ul {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding-left: 17px;
-  font-size: 12px;
-  line-height: 1.4;
+#historyTooltip .history-change-table td.history-change-before {
+  color: color-mix(in srgb, var(--fg) 65%, transparent);
 }
 
-.history-tooltip li::marker {
-  color: var(--history-event-color);
+#historyTooltip .history-change-table td.history-change-after {
+  font-weight: 650;
+}
+
+#historyTooltip .history-change-table th::before,
+#historyTooltip .history-change-table th::after {
+  content: none;
+}
+
+.history-tooltip-note {
+  margin: 14px 0 0;
+  color: color-mix(in srgb, var(--fg) 75%, transparent);
+  font-size: 12px;
 }
 
 .danger {
