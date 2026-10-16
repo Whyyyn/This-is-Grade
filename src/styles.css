@@ -356,6 +356,44 @@ h2 {
   padding: 20px;
 }
 
+.credential-notice {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: min(400px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid var(--line-strong);
+  color: var(--fg);
+  background: var(--glass-strong);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.credential-notice[hidden] {
+  display: none;
+}
+
+.credential-notice p {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.credential-notice button {
+  flex: 0 0 32px;
+  min-height: 32px;
+  padding: 0;
+  color: inherit;
+  font-size: 22px;
+  line-height: 1;
+}
+
 label {
   display: grid;
   gap: 8px;

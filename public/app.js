@@ -6,6 +6,7 @@ import {
 } from './effort-progress.js';
 import { getPredictionCategories, predictCourseScore } from './prediction.js';
 import { renderHistoryTooltip } from './history-tooltip.js';
+import { storeBrowserCredential } from './browser-credentials.js';
 
 const state = {
   grades: [],
@@ -31,6 +32,9 @@ const els = {
   email: document.querySelector('#email'),
   password: document.querySelector('#password'),
   status: document.querySelector('#status'),
+  credentialNotice: document.querySelector('#credentialNotice'),
+  credentialNoticeMessage: document.querySelector('#credentialNoticeMessage'),
+  credentialNoticeClose: document.querySelector('#credentialNoticeClose'),
   subjectPicker: document.querySelector('#subjectPicker'),
   selectionCount: document.querySelector('#selectionCount'),
   averageValue: document.querySelector('#averageValue'),
@@ -101,6 +105,7 @@ let realtimeBusy = false;
 let realtimeEnrolled = false;
 let pushDeviceIdMemory = '';
 let changelogLoaded = false;
+let scrapeAttempt = 0;
 
 applyTheme(loadTheme(), false);
 applyMarketMode(loadMarketMode());
@@ -570,16 +575,6 @@ async function loadBrowserCredential() {
     if (credential?.password && !els.password.value) els.password.value = credential.password;
   } catch {
     // Browser password managers can decline programmatic access.
-  }
-}
-
-async function storeBrowserCredential(email, password) {
-  if (!email || !password || !('credentials' in navigator) || !window.PasswordCredential) return;
-  try {
-    const credential = new PasswordCredential({ id: email, password, name: email });
-    await navigator.credentials.store(credential);
-  } catch {
-    // Saving remains controlled by the browser and the user.
   }
 }
 
@@ -2016,8 +2011,14 @@ els.password.addEventListener('keydown', (event) => {
   }
 });
 
+els.credentialNoticeClose.addEventListener('click', () => {
+  els.credentialNotice.hidden = true;
+});
+
 els.form.addEventListener('submit', async (event) => {
   event.preventDefault();
+  const attempt = ++scrapeAttempt;
+  els.credentialNotice.hidden = true;
   setStatus('抓取中');
   const email = els.email.value.trim();
   const password = normalizePasswordForHistory(els.password.value);
@@ -2038,8 +2039,14 @@ els.form.addEventListener('submit', async (event) => {
     state.effortDemoBackup = null;
     updateEffortDemoControls();
     updateGrades(data);
-    await storeBrowserCredential(email, password);
     setStatus('抓取完成', 'ok');
+    void storeBrowserCredential(email, password).then((result) => {
+      if (attempt !== scrapeAttempt || !['timeout', 'failed'].includes(result)) return;
+      els.credentialNoticeMessage.textContent = result === 'timeout'
+        ? '成绩已更新。浏览器保存密码尚未完成，不影响继续查看成绩。'
+        : '成绩已更新。浏览器未能保存密码，下次登录时可能需要重新输入。';
+      els.credentialNotice.hidden = false;
+    });
     if (response.headers.get('X-History-Disabled')) {
       setHistoryStatus('历史功能需要配置 SESSION_SECRET', 'bad');
     } else {
