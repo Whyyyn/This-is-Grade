@@ -168,8 +168,64 @@
 
         <section class="panel prediction-panel">
           <div class="panel-head">
-            <h2>成绩预测</h2>
+            <div class="prediction-title">
+              <h2>成绩预测</h2>
+              <button id="predictionHelpToggle" class="prediction-help-toggle" type="button" aria-expanded="false" aria-controls="predictionHelp">原理？</button>
+            </div>
             <span class="status">Preview</span>
+          </div>
+          <div id="predictionHelp" class="prediction-help" hidden>
+            <div class="prediction-explainer-intro">
+              <strong>多一次成绩，会发生什么？</strong>
+              <span>示例演示 · 这组作业占总评 30%</span>
+            </div>
+            <div class="prediction-walkthrough">
+              <div class="prediction-step">
+                <div class="prediction-step-label"><span>1</span>把同权重作业放一起</div>
+                <div class="prediction-score-cards" aria-label="已有两次作业，分别得 70% 和 90%，每次权重 15%">
+                  <div><strong>70<small>%</small></strong><span>权重 15%</span></div>
+                  <div><strong>90<small>%</small></strong><span>权重 15%</span></div>
+                </div>
+                <div class="prediction-step-result">当前组内平均 <strong>80%</strong></div>
+              </div>
+              <div class="prediction-step prediction-step-new">
+                <div class="prediction-step-label"><span>2</span>加入你假设的新成绩</div>
+                <label class="prediction-example-label" for="predictionExampleScore">假设下次拿到 <output id="predictionExampleScoreValue" for="predictionExampleScore">100%</output></label>
+                <input id="predictionExampleScore" class="prediction-example-slider" type="range" min="0" max="120" step="1" value="100" aria-describedby="predictionExampleHint" />
+                <div class="prediction-slider-scale" aria-hidden="true"><span>0%</span><span>120%</span></div>
+                <p id="predictionExampleHint" class="prediction-example-hint">拖动试试，看右边怎样变化</p>
+                <div class="prediction-step-result">新的组内平均 <strong id="predictionExampleAverage">86.7%</strong></div>
+              </div>
+              <div class="prediction-step prediction-step-total" aria-live="polite" aria-atomic="true">
+                <div class="prediction-step-label"><span>3</span>按占比，换算到总评</div>
+                <div class="prediction-weight-bar" role="img" aria-label="这组作业占总评 30%，其余成绩占 70%"><span></span><span></span></div>
+                <div class="prediction-weight-legend"><span><i></i>这组 30%</span><span>其余 70%</span></div>
+                <div class="prediction-example-impact"><strong id="predictionExampleDelta">+2.00</strong><span>总评预计变化</span></div>
+                <div class="prediction-step-result">示例总评 <span>85 → <strong id="predictionExampleTotal">87.00</strong></span></div>
+              </div>
+            </div>
+            <div class="prediction-caveat-heading"><strong>为什么只是估算？</strong><span>模型假设 ≠ 老师的完整规则</span></div>
+            <div class="prediction-caveats">
+              <div class="prediction-caveat">
+                <svg viewBox="0 0 48 40" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="16" height="12" rx="3"/><rect x="29" y="6" width="16" height="12" rx="3"/><path d="M11 22v7h26v-7M24 29v7" stroke-dasharray="3 3"/><path d="M7 12h8m18 0h8"/></svg>
+                <div><strong>同权重，未必同一类</strong><p>只按权重分组，可能和老师的分类不同。</p></div>
+              </div>
+              <div class="prediction-caveat">
+                <svg viewBox="0 0 48 40" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h38M5 28h38"/><circle cx="17" cy="12" r="5" fill="var(--glass-input)"/><circle cx="32" cy="28" r="5" fill="var(--glass-input)"/></svg>
+                <div><strong>占比可能重新分配</strong><p>这里固定组的总占比；学校可能重新算权重。</p></div>
+              </div>
+              <div class="prediction-caveat">
+                <svg viewBox="0 0 48 40" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="3" width="32" height="34" rx="4"/><path d="m14 13 3 3 5-6m4 3h8m-20 12h8m4 0h8m-20 6h20"/><path d="m14 21 8 8"/></svg>
+                <div><strong>特殊计分没算进去</strong><p>如按满分累计、去掉最低分、补考或额外加分。</p></div>
+              </div>
+            </div>
+            <details class="prediction-help-details">
+              <summary>查看公式与计算细节</summary>
+              <p>预测总评 = 当前总评 +（新组内平均 − 原组内平均）× 该组合计权重 ÷ 100。组内每次作业等权，新增成绩后该组合计权重保持不变。</p>
+              <p>按显示的两位小数匹配权重，可能合并原本略有差异的作业。预测只使用当前已获取的成绩；没有总评或作业明细时无法试算。</p>
+              <p>该科在已选四科中时，也会更新均分。界面先将各科四舍五入为整数，再取平均并四舍五入，因此小幅变化可能不体现在显示均分上。</p>
+            </details>
+            <p class="prediction-help-footnote">以上是演示数据；实际结果以学校发布的成绩为准。</p>
           </div>
           <div class="predict-grid">
             <label>

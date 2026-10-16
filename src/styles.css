@@ -846,6 +846,314 @@ button:hover {
   grid-area: prediction;
 }
 
+.prediction-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.prediction-title .prediction-help-toggle {
+  flex: 0 0 auto;
+  min-height: 32px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  background: var(--glass-input);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.prediction-help {
+  container-type: inline-size;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  background: var(--glass-input);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.prediction-explainer-intro,
+.prediction-caveat-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.prediction-explainer-intro > strong {
+  font-size: 17px;
+}
+
+.prediction-explainer-intro > span,
+.prediction-caveat-heading > span,
+.prediction-example-hint,
+.prediction-help-footnote {
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+  font-size: 12px;
+}
+
+.prediction-walkthrough {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.prediction-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.prediction-step + .prediction-step::before {
+  content: "→";
+  position: absolute;
+  top: 50%;
+  left: -19px;
+  color: var(--fg);
+}
+
+.prediction-step-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.prediction-step-label > span {
+  display: grid;
+  flex: 0 0 22px;
+  place-items: center;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.prediction-score-cards {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.prediction-score-cards > div {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  max-width: 100px;
+  padding: 12px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--glass-input);
+  text-align: center;
+}
+
+.prediction-score-cards strong {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.prediction-score-cards small {
+  font-size: 13px;
+}
+
+.prediction-score-cards > div > span {
+  font-size: 11px;
+}
+
+.prediction-step-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 8px;
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+.prediction-step-result strong {
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+
+.prediction-step .prediction-example-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 20px 0 8px;
+  font-size: 12px;
+}
+
+.prediction-example-label output {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.prediction-step input.prediction-example-slider {
+  width: 100%;
+  height: 24px;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--fg);
+  cursor: pointer;
+}
+
+.prediction-slider-scale,
+.prediction-weight-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.prediction-example-hint {
+  margin: 8px 0 14px;
+}
+
+.prediction-weight-bar {
+  display: flex;
+  gap: 3px;
+  height: 12px;
+  margin-top: 23px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.prediction-weight-bar > span:first-child {
+  flex: 3;
+  background: var(--fg);
+}
+
+.prediction-weight-bar > span:last-child {
+  flex: 7;
+  background: color-mix(in srgb, var(--fg) 15%, transparent);
+}
+
+.prediction-weight-legend {
+  margin-top: 6px;
+}
+
+.prediction-weight-legend i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 2px;
+  background: var(--fg);
+}
+
+.prediction-example-impact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 10px 0;
+}
+
+.prediction-example-impact > strong {
+  font-size: 32px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.prediction-example-impact > span {
+  font-size: 11px;
+}
+
+.prediction-caveat-heading {
+  margin-top: 22px;
+}
+
+.prediction-caveats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 12px 0 16px;
+}
+
+.prediction-caveat {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.prediction-caveat svg {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 36px;
+}
+
+.prediction-caveat strong {
+  font-size: 12px;
+}
+
+.prediction-caveat p {
+  margin-top: 4px;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--fg) 78%, transparent);
+}
+
+.prediction-help-details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+.prediction-help-details summary {
+  cursor: pointer;
+}
+
+.prediction-help-details p {
+  margin-top: 10px;
+}
+
+.prediction-help-footnote {
+  margin-top: 10px;
+}
+
+@container (max-width: 660px) {
+  .prediction-walkthrough,
+  .prediction-caveats {
+    grid-template-columns: 1fr;
+  }
+
+  .prediction-step + .prediction-step::before {
+    content: "↓";
+    top: -22px;
+    left: calc(50% - 5px);
+  }
+
+  .prediction-example-hint {
+    font-size: 0;
+  }
+
+  .prediction-example-hint::after {
+    content: "拖动试试，看下面怎样变化";
+    font-size: 12px;
+  }
+}
+
+
 .table-panel {
   grid-area: details;
   min-height: 560px;

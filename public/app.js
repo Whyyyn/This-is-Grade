@@ -2072,6 +2072,21 @@ els.predictionCategory?.addEventListener('change', () => {
   renderPrediction();
 });
 els.predictionScore?.addEventListener('input', renderPrediction);
+document.querySelector('#predictionHelpToggle')?.addEventListener('click', (event) => {
+  const help = document.querySelector('#predictionHelp');
+  if (!help) return;
+  help.hidden = !help.hidden;
+  event.currentTarget.setAttribute('aria-expanded', String(!help.hidden));
+});
+document.querySelector('#predictionExampleScore')?.addEventListener('input', (event) => {
+  const score = Number(event.currentTarget.value);
+  const average = (70 + 90 + score) / 3;
+  const delta = (average - 80) * 0.3;
+  document.querySelector('#predictionExampleScoreValue').textContent = score + '%';
+  document.querySelector('#predictionExampleAverage').textContent = average.toFixed(1) + '%';
+  document.querySelector('#predictionExampleDelta').textContent = (delta >= 0 ? '+' : '') + delta.toFixed(2);
+  document.querySelector('#predictionExampleTotal').textContent = (85 + delta).toFixed(2);
+});
 els.effortEndDate?.addEventListener('change', () => {
   try {
     localStorage.setItem('effort-term-end', els.effortEndDate.value);
