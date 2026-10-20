@@ -36,11 +36,11 @@
             <span id="status" class="status">待连接</span>
           </div>
           <label>
-            <span>enter account</span>
+            <span>WebTESS 邮箱</span>
             <input id="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="name@example.com" />
           </label>
           <label>
-            <span>enter password</span>
+            <span>密码</span>
             <input id="password" name="password" type="password" autocomplete="current-password" placeholder="local only" />
           </label>
           <button class="primary" type="submit">抓取并更新</button>
@@ -274,7 +274,7 @@
         <div class="settings-head">
           <div>
             <p class="settings-kicker">SETTINGS</p>
-            <h2 id="settingsTitle">外观设置</h2>
+            <h2 id="settingsTitle">外观与设置</h2>
           </div>
           <button id="settingsCloseButton" class="icon-button" type="button" aria-label="关闭设置"><span>×</span></button>
         </div>
@@ -332,23 +332,29 @@
             </span>
           </label>
           <label class="feature-toggle realtime-feature-toggle">
-            <input id="realtimeFeatureToggle" type="checkbox" />
+            <input id="realtimeFeatureToggle" type="checkbox" disabled aria-describedby="realtimeNote realtimeStatus realtimeRequirements" />
             <span>
               <strong>即时成绩通知 · 邀请 Beta</strong>
               <small>限 5 人；每天 06:00–24:00 每 5 分钟检查。服务器会加密保存 WebTESS 登录资料，成绩变化后立即推送。</small>
             </span>
           </label>
-          <div id="realtimeControls" class="push-controls realtime-controls" hidden>
+          <div id="realtimeControls" class="push-controls realtime-controls">
             <label>
               <span>邀请码</span>
               <input id="realtimeInviteCode" type="password" autocomplete="off" placeholder="输入 Beta 邀请码" />
             </label>
-            <p class="settings-note realtime-note">启用前，请先在首页 WebTESS 登录框中填写邮箱和密码。浏览器会同时询问是否允许成绩更新通知。</p>
-            <p id="realtimeStatus" class="settings-note push-status" role="status">默认关闭</p>
+            <p id="realtimeNote" class="settings-note realtime-note">新用户需先填写邀请码，以及首页的 WebTESS 邮箱和密码，完成下列准备后才能勾选。勾选后才会申请浏览器通知权限，并由服务器验证邀请码和登录资料。</p>
+            <p id="realtimeStatus" class="settings-note push-status" role="status" aria-live="polite" aria-atomic="true">正在检查通知服务状态…</p>
+            <ul id="realtimeRequirements" class="settings-note realtime-requirements" aria-label="启用即时通知前需要完成的准备"></ul>
+            <div class="realtime-actions">
+              <button id="realtimeLoginButton" class="ghost compact" type="button">前往填写登录资料</button>
+              <button id="realtimeRetryButton" class="ghost compact" type="button">重新检查</button>
+              <button id="realtimeDisableButton" class="ghost compact" type="button" hidden>关闭并删除资料</button>
+            </div>
           </div>
         </fieldset>
-        <fieldset class="developer-fieldset">
-          <legend>开发者工具</legend>
+        <details class="developer-fieldset">
+          <summary>开发者工具</summary>
           <div class="developer-card">
             <div>
               <strong>成绩走势范例</strong>
@@ -369,7 +375,7 @@
               <button id="exitExampleEffortButton" class="ghost compact" type="button" hidden>退出范例</button>
             </div>
           </div>
-        </fieldset>
+        </details>
       </section>
     </div>
 

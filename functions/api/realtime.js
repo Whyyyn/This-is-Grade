@@ -21,12 +21,17 @@ export async function onRequestGet(context) {
     const db = requireDb(context.env);
     const rawDeviceId = new URL(context.request.url).searchParams.get('deviceId');
     const deviceId = rawDeviceId ? validateDeviceId(rawDeviceId) : '';
-    const row = deviceId ? await db.prepare(
-      `SELECT slot, enabled, consecutive_failures, last_error_code, last_checked_at, last_success_at
-       FROM realtime_beta_accounts WHERE device_id = ? LIMIT 1`
-    ).bind(deviceId).first() : null;
+    // Check both migrations even for a new device before making setup available.
+    const [row] = await Promise.all([
+      db.prepare(
+        `SELECT slot, enabled, consecutive_failures, last_error_code, last_checked_at, last_success_at
+         FROM realtime_beta_accounts WHERE device_id = ? LIMIT 1`
+      ).bind(deviceId).first(),
+      db.prepare('SELECT 1 AS ready FROM push_subscriptions LIMIT 1').first()
+    ]);
     return json({
-      configured: Boolean(context.env?.WEBTESS_CREDENTIALS_KEY && context.env?.BETA_INVITE_CODES),
+      configured: realtimeConfigured(context.env),
+      publicKey: String(context.env?.VAPID_PUBLIC_KEY || ''),
       enrolled: Boolean(row),
       enabled: row?.enabled === 1,
       slot: row?.slot || null,
@@ -122,11 +127,24 @@ export async function onRequestDelete(context) {
     const db = requireDb(context.env);
     const body = await readJson(context.request);
     const deviceId = validateDeviceId(body?.deviceId);
-    await db.prepare('DELETE FROM realtime_beta_accounts WHERE device_id = ?').bind(deviceId).run();
+    // Failed recovery attempts retain the invite slot while removing their push subscription.
+    if (body?.preserveEnrollment === true) {
+      await db.prepare('UPDATE realtime_beta_accounts SET enabled = 0 WHERE device_id = ?').bind(deviceId).run();
+    } else {
+      await db.prepare('DELETE FROM realtime_beta_accounts WHERE device_id = ?').bind(deviceId).run();
+    }
+    await db.prepare('DELETE FROM push_subscriptions WHERE device_id = ?').bind(deviceId).run();
     return json({ ok: true });
   } catch (error) {
     return json({ error: safeError(error) }, error.status || 500);
   }
+}
+
+function realtimeConfigured(env) {
+  const codes = String(env?.BETA_INVITE_CODES || '').split(',').map((code) => code.trim()).filter(Boolean);
+  return String(env?.WEBTESS_CREDENTIALS_KEY || '').length >= 32
+    && codes.length === 5 && new Set(codes).size === 5
+    && /^[A-Za-z0-9_-]{87}$/.test(String(env?.VAPID_PUBLIC_KEY || ''));
 }
 
 function validateDeviceId(value) {

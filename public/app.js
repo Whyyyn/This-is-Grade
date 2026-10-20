@@ -4,6 +4,7 @@ import {
   isEffortColumn,
   sortEffortColumnsFirst
 } from './effort-progress.js';
+import { createRealtimeController, registerPushWorker } from './realtime-ui.js';
 import { getPredictionCategories, predictCourseScore } from './prediction.js';
 import { renderHistoryTooltip } from './history-tooltip.js';
 import { storeBrowserCredential } from './browser-credentials.js';
@@ -54,6 +55,10 @@ const els = {
   realtimeControls: document.querySelector('#realtimeControls'),
   realtimeInviteCode: document.querySelector('#realtimeInviteCode'),
   realtimeStatus: document.querySelector('#realtimeStatus'),
+  realtimeRequirements: document.querySelector('#realtimeRequirements'),
+  realtimeRetryButton: document.querySelector('#realtimeRetryButton'),
+  realtimeDisableButton: document.querySelector('#realtimeDisableButton'),
+  realtimeLoginButton: document.querySelector('#realtimeLoginButton'),
   exportButton: document.querySelector('#exportButton'),
   copyLayoutButton: document.querySelector('#copyLayoutButton'),
   historyStatus: document.querySelector('#historyStatus'),
@@ -101,8 +106,10 @@ const CHANGELOG_API = 'https://api.github.com/repos/Whyyyn/This-is-Grade/commits
 const CHANGELOG_URL = 'https://github.com/Whyyyn/This-is-Grade/commits/main/';
 const PUSH_DEVICE_ID_KEY = 'grade-push-device-id';
 let pushRegistrationPromise = null;
-let realtimeBusy = false;
-let realtimeEnrolled = false;
+let realtimePublicKey = '';
+let realtimeController = null;
+let settingsPreviousFocus = null;
+let settingsPreviousOverflow = '';
 let pushDeviceIdMemory = '';
 let changelogLoaded = false;
 let scrapeAttempt = 0;
@@ -221,15 +228,22 @@ function applyEffortFeatureEnabled(enabled, save = true) {
 }
 
 function openSettings() {
-  if (!els.settingsModal) return;
+  if (!els.settingsModal || !els.settingsModal.hidden) return;
+  settingsPreviousFocus = document.activeElement;
+  settingsPreviousOverflow = document.body.style.overflow;
+  document.body.style.overflow = 'hidden';
+  document.querySelector('.shell').inert = true;
   els.settingsModal.hidden = false;
+  realtimeController?.updatePrerequisites();
   els.settingsCloseButton?.focus();
 }
 
 function closeSettings() {
-  if (!els.settingsModal) return;
+  if (!els.settingsModal || els.settingsModal.hidden) return;
   els.settingsModal.hidden = true;
-  els.settingsButton?.focus();
+  document.body.style.overflow = settingsPreviousOverflow;
+  document.querySelector('.shell').inert = false;
+  (settingsPreviousFocus?.isConnected ? settingsPreviousFocus : els.settingsButton)?.focus({ preventScroll: true });
 }
 
 function updateGrades(grades, options = {}) {
@@ -284,173 +298,176 @@ function getPushDeviceId(create = false) {
 }
 
 function getPushRegistration() {
-  if (!pushRegistrationPromise) pushRegistrationPromise = navigator.serviceWorker.register('/sw.js');
+  if (!pushRegistrationPromise) {
+    pushRegistrationPromise = registerPushWorker(navigator.serviceWorker).catch((error) => {
+      pushRegistrationPromise = null;
+      throw error;
+    });
+  }
   return pushRegistrationPromise;
 }
 
-async function initializeRealtimeBeta() {
-  if (!els.realtimeFeatureToggle) return;
-  if (!pushSupported()) {
-    els.realtimeFeatureToggle.disabled = true;
-    els.realtimeControls.hidden = false;
-    setRealtimeStatus('此浏览器不支持后台成绩通知。', 'bad');
-    return;
-  }
-  const deviceId = getPushDeviceId(false);
+async function realtimeRequest(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.method === 'POST' ? 90000 : 15000);
   try {
-    const query = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
-    const response = await fetch(`/api/realtime${query}`, { credentials: 'same-origin' });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || '无法读取即时通知状态。');
-    if (!result.configured) {
-      els.realtimeFeatureToggle.disabled = true;
-      els.realtimeControls.hidden = false;
-      setRealtimeStatus('服务器尚未配置即时通知密钥。', 'bad');
-      return;
-    }
-    realtimeEnrolled = result.enrolled === true;
-    els.realtimeFeatureToggle.checked = result.enabled === true;
-    els.realtimeControls.hidden = !result.enrolled;
-    if (result.enabled) {
-      setRealtimeStatus(`已启用 · Beta ${result.slot}/5 · 每天 06:00–24:00`, 'ok');
-    } else if (result.enrolled) {
-      setRealtimeStatus('后台检查已暂停；重新输入 WebTESS 登录资料即可恢复。', 'bad');
-    } else {
-      setRealtimeStatus('默认关闭');
-    }
+    const response = await fetch(url, { credentials: 'same-origin', ...options, signal: controller.signal });
+    let result;
+    try { result = await response.json(); } catch { throw new Error('通知服务返回了无效响应，请重新检查。'); }
+    if (!response.ok) throw new Error(result.error || '通知服务暂时不可用，请重试。');
+    return result;
   } catch (error) {
-    els.realtimeFeatureToggle.disabled = true;
-    els.realtimeControls.hidden = false;
-    setRealtimeStatus(error.message || '无法读取即时通知状态。', 'bad');
+    if (error.name === 'AbortError') throw new Error('通知服务响应超时，请检查网络后重试。');
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function ensureRealtimePushSubscription() {
-  if (!pushSupported()) throw new Error('此浏览器不支持后台成绩通知。');
-  let newSubscription = null;
-  try {
-    const configResponse = await fetch('/api/push', { credentials: 'same-origin' });
-    const config = await configResponse.json();
-    if (!configResponse.ok || !config.configured || !config.publicKey) {
-      throw new Error('服务器尚未配置推送密钥。');
+function initializeRealtimeBeta() {
+  if (!els.realtimeFeatureToggle) return;
+  realtimeController = createRealtimeController({
+    getInputs: () => ({
+      supported: pushSupported(),
+      permission: 'Notification' in window ? Notification.permission : 'unsupported',
+      email: els.email.value.trim(),
+      password: normalizePasswordForHistory(els.password.value),
+      inviteCode: els.realtimeInviteCode?.value || ''
+    }),
+    hasSavedDevice: () => Boolean(getPushDeviceId(false)),
+    readStatus: async () => {
+      const deviceId = getPushDeviceId(false);
+      const query = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
+      const result = await realtimeRequest(`/api/realtime${query}`);
+      realtimePublicKey = result.publicKey || '';
+      return result;
+    },
+    enable: enableRealtimeBeta,
+    disable: () => removeRealtimePushSubscription(),
+    render: (state) => {
+      els.realtimeFeatureToggle.checked = state.enabled;
+      els.realtimeFeatureToggle.disabled = state.toggleDisabled;
+      els.realtimeFeatureToggle.setAttribute('aria-busy', String(Boolean(state.busy)));
+      els.realtimeControls.hidden = false;
+      els.realtimeControls.setAttribute('aria-busy', String(Boolean(state.busy)));
+      els.realtimeInviteCode.disabled = Boolean(state.busy) || state.enrolled;
+      els.realtimeInviteCode.placeholder = state.enrolled ? '此设备已获得 Beta 资格，无需再次填写' : '输入 Beta 邀请码';
+      setRealtimeStatus(state.message, state.tone);
+      if (els.realtimeRequirements) {
+        const showRequirements = !state.enabled && !state.busy && state.requirements.length > 0;
+        els.realtimeRequirements.hidden = !showRequirements;
+        els.realtimeRequirements.replaceChildren(...state.requirements.map((message) => {
+          const item = document.createElement('li');
+          item.textContent = message;
+          return item;
+        }));
+      }
+      if (els.realtimeRetryButton) els.realtimeRetryButton.disabled = Boolean(state.busy) || state.loading;
+      if (els.realtimeDisableButton) {
+        els.realtimeDisableButton.hidden = !(state.enrolled || state.cleanupRequired || getPushDeviceId(false));
+        els.realtimeDisableButton.disabled = !state.canCleanup;
+        els.realtimeDisableButton.textContent = state.cleanupRequired ? '清理未完成的设置' : '关闭并删除资料';
+      }
+      if (els.realtimeLoginButton) els.realtimeLoginButton.disabled = Boolean(state.busy);
     }
-    setRealtimeStatus('正在请求浏览器通知权限…');
+  });
+  realtimeController.load();
+}
+
+async function enableRealtimeBeta(inputs, progress) {
+  let subscription = null;
+  let attemptedSubscription = false;
+  try {
+    if (!pushSupported()) throw new Error('此浏览器不支持后台成绩通知。');
+    if (!realtimePublicKey) throw new Error('服务器尚未配置推送密钥，请重新检查。');
+    progress('正在启用：请允许浏览器发送成绩更新通知…');
+    // Request permission in the user's click gesture, before any asynchronous network work.
     const permission = Notification.permission === 'granted'
       ? 'granted'
       : await Notification.requestPermission();
-    if (permission !== 'granted') throw new Error('没有获得通知权限。请在浏览器设置中允许通知。');
+    if (permission !== 'granted') throw new Error('未获得通知权限。请在浏览器设置中允许通知后重新检查。');
 
+    progress('正在启用：建立浏览器通知订阅…');
     const registration = await getPushRegistration();
-    let subscription = await registration.pushManager.getSubscription();
+    subscription = await registration.pushManager.getSubscription();
+    attemptedSubscription = true;
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: base64UrlToBytes(config.publicKey)
+        applicationServerKey: base64UrlToBytes(realtimePublicKey)
       });
-      newSubscription = subscription;
     }
     await savePushSubscription(subscription);
-    return subscription;
+    progress(inputs.enrolled ? '正在恢复：验证 WebTESS 邮箱和密码…' : '正在启用：验证邀请码和 WebTESS 邮箱、密码…');
+    const result = await realtimeRequest('/api/realtime', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: getPushDeviceId(true),
+        inviteCode: inputs.inviteCode,
+        email: inputs.email,
+        password: inputs.password,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+      })
+    });
+    if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
+    return result;
   } catch (error) {
-    if (newSubscription) await newSubscription.unsubscribe().catch(() => {});
+    if (attemptedSubscription) {
+      progress('启用未完成，正在撤销通知订阅…');
+      try {
+        await removeRealtimePushSubscription({ preserveEnrollment: inputs.enrolled });
+      } catch (cleanupError) {
+        // Always try the local rollback, even when server cleanup is temporarily unavailable.
+        if (subscription) await subscription.unsubscribe().catch(() => {});
+        error.cleanupRequired = true;
+        error.message += ' 部分设置未能清理，请点击“清理未完成的设置”重试。';
+      }
+    }
     throw error;
   }
 }
 
-async function enableRealtimeBeta() {
-  if (realtimeBusy) return;
-  realtimeBusy = true;
-  els.realtimeFeatureToggle.disabled = true;
-  els.realtimeControls.hidden = false;
-  setRealtimeStatus('正在验证邀请码和 WebTESS 登录…');
-  try {
-    const email = els.email.value.trim();
-    const password = normalizePasswordForHistory(els.password.value);
-    if (!email || !password) throw new Error('请先在首页填写 WebTESS 邮箱和密码。');
-    await ensureRealtimePushSubscription();
-    setRealtimeStatus('正在验证邀请码和 WebTESS 登录…');
-    const response = await fetch('/api/realtime', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deviceId: getPushDeviceId(true),
-        inviteCode: els.realtimeInviteCode?.value || '',
-        email,
-        password,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-      })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || '即时通知启用失败。');
-    els.realtimeFeatureToggle.checked = true;
-    realtimeEnrolled = true;
-    if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
-    setRealtimeStatus(`已启用 · Beta ${result.slot}/5 · 每天 06:00–24:00`, 'ok');
-  } catch (error) {
-    if (!realtimeEnrolled) await removeRealtimePushSubscription().catch(() => {});
-    els.realtimeFeatureToggle.checked = false;
-    setRealtimeStatus(error.message || '即时通知启用失败。', 'bad');
-  } finally {
-    realtimeBusy = false;
-    els.realtimeFeatureToggle.disabled = false;
-  }
-}
-
-async function disableRealtimeBeta() {
-  if (realtimeBusy) return;
-  realtimeBusy = true;
-  els.realtimeFeatureToggle.disabled = true;
-  setRealtimeStatus('正在关闭并删除后台登录资料…');
-  try {
-    await removeRealtimePushSubscription();
-    els.realtimeFeatureToggle.checked = false;
-    realtimeEnrolled = false;
-    els.realtimeControls.hidden = true;
-    if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
-    setRealtimeStatus('即时通知已关闭，服务器端登录资料已删除。');
-  } catch (error) {
-    els.realtimeFeatureToggle.checked = true;
-    setRealtimeStatus(error.message || '关闭即时通知失败。', 'bad');
-  } finally {
-    realtimeBusy = false;
-    els.realtimeFeatureToggle.disabled = false;
-  }
-}
-
 async function savePushSubscription(subscription) {
-  const payload = {
-    deviceId: getPushDeviceId(true),
-    subscription: subscription.toJSON(),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  };
-  const response = await fetch('/api/push', {
+  return realtimeRequest('/api/push', {
     method: 'POST',
-    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      deviceId: getPushDeviceId(true),
+      subscription: subscription.toJSON(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    })
   });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || '推送设置保存失败。');
 }
 
-async function removeRealtimePushSubscription() {
+async function removeRealtimePushSubscription({ preserveEnrollment = false } = {}) {
   const deviceId = getPushDeviceId(false);
   if (deviceId) {
-    const response = await fetch('/api/push', {
+    await realtimeRequest('/api/realtime', {
       method: 'DELETE',
-      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId })
+      body: JSON.stringify({ deviceId, preserveEnrollment })
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || '关闭即时通知失败。');
   }
-  const registration = await getPushRegistration();
-  const subscription = await registration.pushManager.getSubscription();
-  if (subscription) await subscription.unsubscribe();
-  try { localStorage.removeItem(PUSH_DEVICE_ID_KEY); } catch {}
-  pushDeviceIdMemory = '';
+  try {
+    // Cleanup remains available if notification permission was revoked. Do not register a new worker here.
+    const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration('/sw.js') : null;
+    const subscription = registration?.pushManager ? await registration.pushManager.getSubscription() : null;
+    if (subscription) {
+      const removed = await subscription.unsubscribe();
+      if (!removed && await registration.pushManager.getSubscription()) throw new Error('浏览器订阅尚未移除');
+    }
+  } catch {
+    const error = new Error('后台通知已停止，但浏览器订阅未能清理，请重试清理。');
+    error.serverRemoved = !preserveEnrollment;
+    error.cleanupRequired = true;
+    throw error;
+  }
+  if (!preserveEnrollment) {
+    try { localStorage.removeItem(PUSH_DEVICE_ID_KEY); } catch {}
+    pushDeviceIdMemory = '';
+    if (els.realtimeInviteCode) els.realtimeInviteCode.value = '';
+  }
 }
 
 function base64UrlToBytes(value) {
@@ -606,6 +623,7 @@ function render() {
   renderEffortProgress();
   renderTable();
   renderAssignmentChart();
+  syncHistoryWithDetail();
 }
 
 function renderEffortProgress() {
@@ -846,6 +864,13 @@ function setDetailSubject(subject) {
   renderEffortProgress();
   renderTable();
   renderAssignmentChart();
+  syncHistoryWithDetail();
+}
+
+function syncHistoryWithDetail() {
+  if (!state.detailSubject || state.historySubject === state.detailSubject) return;
+  state.historySubject = state.detailSubject;
+  renderHistoryChart();
 }
 
 function updateDetailTabSelection() {
@@ -870,7 +895,7 @@ function renderAverage() {
     els.averageFormula.textContent = !selectedGrades.length
       ? '选择四科后计算'
       : selectedGrades.length < 4
-        ? '还需要选择四科'
+        ? `再选择 ${4 - selectedGrades.length} 科即可计算`
         : '所选科目中有尚未发布的总评';
     return;
   }
@@ -892,7 +917,7 @@ function renderDetailTabs() {
     els.detailTabs.style.setProperty('--detail-index', '0');
     const empty = document.createElement('p');
     empty.className = 'muted inline-empty';
-    empty.textContent = '左侧选择展示的科目后，这里会出现四个切换标签。';
+    empty.textContent = '在四科均分中选择科目后，即可切换查看成绩明细。';
     els.detailTabs.append(empty);
     if (els.detailSubjectSelect) {
       const option = document.createElement('option');
@@ -1008,6 +1033,18 @@ function renderTable() {
     els.gradeRows.append(row);
     return;
   }
+
+  const totalRow = document.createElement('tr');
+  totalRow.className = 'course-total-row';
+  const totalLabel = document.createElement('th');
+  totalLabel.scope = 'row';
+  totalLabel.textContent = '总分';
+  totalRow.append(totalLabel);
+  appendCell(totalRow, grade.subject);
+  appendCell(totalRow, Number.isFinite(grade.score) ? String(grade.score) : '暂无总评', 'course-total-score');
+  appendCell(totalRow, Number.isFinite(grade.score) ? grade.score + '%' : '—');
+  appendCell(totalRow, '—');
+  els.gradeRows.append(totalRow);
 
   if (!grade.assignments.length) {
     const row = document.createElement('tr');
@@ -1589,11 +1626,13 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
     state.historySnapshots = Array.isArray(snapshots) ? snapshots : [];
     state.historyIsDemo = options.demo === true;
     if (!state.historyIsDemo) state.historyLiveSnapshots = state.historySnapshots;
+    if (state.detailSubject) state.historySubject = state.detailSubject;
   }
   snapshots = state.historySnapshots;
   updateHistoryDemoControls();
 
   const subjects = historySubjects(snapshots);
+  if (state.detailSubject && !subjects.includes(state.detailSubject)) subjects.unshift(state.detailSubject);
   renderHistorySubjectOptions(subjects);
   if (!snapshots.length || !subjects.length) {
     els.historyChart.removeAttribute('data-tone');
@@ -1602,8 +1641,6 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
     return;
   }
 
-  if (!subjects.includes(state.historySubject)) state.historySubject = subjects[0];
-  renderHistorySubjectOptions(subjects);
   const subject = state.historySubject;
   const points = [];
   for (const snapshot of snapshots) {
@@ -1614,7 +1651,12 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
       points.push({ snapshot, score: grade.score });
     }
   }
-  if (!points.length) return;
+  if (!points.length) {
+    els.historyChart.removeAttribute('data-tone');
+    els.historyChart.innerHTML = `<p class="muted chart-empty">${escapeHtml(subject)} 暂无历史记录。</p>`;
+    if (els.historySummary) els.historySummary.hidden = true;
+    return;
+  }
   const width = Math.max(920, points.length * 38 + 78);
   const height = 310;
   const plot = { left: 54, right: 24, top: 28, bottom: 46 };
@@ -2118,9 +2160,19 @@ els.effortFeatureToggle?.addEventListener('change', () => {
   renderEffortProgress();
 });
 els.realtimeFeatureToggle?.addEventListener('change', () => {
-  if (els.realtimeFeatureToggle.checked) enableRealtimeBeta();
-  else disableRealtimeBeta();
+  realtimeController?.setEnabled(els.realtimeFeatureToggle.checked);
 });
+for (const input of [els.email, els.password, els.realtimeInviteCode]) {
+  for (const event of ['input', 'change']) input?.addEventListener(event, () => realtimeController?.updatePrerequisites());
+}
+els.realtimeRetryButton?.addEventListener('click', () => realtimeController?.load());
+els.realtimeDisableButton?.addEventListener('click', () => realtimeController?.setEnabled(false));
+els.realtimeLoginButton?.addEventListener('click', () => {
+  closeSettings();
+  els.form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  els.email?.focus({ preventScroll: true });
+});
+window.addEventListener('focus', () => realtimeController?.updatePrerequisites());
 els.loadExampleHistoryButton?.addEventListener('click', () => {
   renderHistoryChart(createExampleHistory(), { demo: true });
   setHistoryStatus('正在预览范例数据', 'ok');
@@ -2149,6 +2201,13 @@ window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change',
   if (document.documentElement.dataset.themeChoice === 'system') applyTheme('system', false);
 });
 document.addEventListener('keydown', (event) => {
+  if (event.key === 'Tab' && !els.settingsModal?.hidden) {
+    const focusable = [...els.settingsModal.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href]')].filter((element) => element.getClientRects().length);
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+  }
   if (event.key === 'Escape' && !els.settingsModal?.hidden) closeSettings();
   if (event.key === 'Escape') hideHistoryTooltip(true);
 });

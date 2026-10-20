@@ -122,3 +122,13 @@ to D1. The encryption key is stored separately as a Cloudflare secret. Passwords
 session cookies, and decrypted grades must never be written to application logs.
 
 History snapshots are encrypted in the browser with AES-GCM. The AES key is derived with PBKDF2 from the WebTESS email and password plus a random salt. D1 stores only `user_id`, `created_at`, `salt`, `iv`, `ciphertext`, and `schema_version`.
+
+## Realtime notification setup
+
+Realtime notification setup now displays the invitation field and unmet
+requirements before enabling the checkbox. Local eligibility checks cover input
+format, browser support, denied permission, and server configuration; the server
+validates the invitation and WebTESS credentials when enabling. Progress and
+failure messages remain visible, failed attempts clean up subscriptions, and
+paused accounts can recover or remove their stored state. Opening settings never
+requests permission or enables notifications automatically.
