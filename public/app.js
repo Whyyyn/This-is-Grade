@@ -1152,7 +1152,7 @@ function renderAssignmentChart() {
     row.dataset.active = 'false';
     row.title = item.title + (item.description ? ' · ' + item.description : '') + ' · 占比 ' + roundHundredths(item.displayWeight) + '% · 实得 ' + roundHundredths(item.scorePercent) + '%';
     row.innerHTML =
-      '<span class="legend-swatch" style="--swatch:' + item.color + '"></span>' +
+      '<span class="legend-swatch" style="--swatch:' + item.color + ';opacity:' + item.opacity + '"></span>' +
       '<span class="legend-text"><strong>' + escapeHtml(item.title) + '</strong><small>' +
       roundHundredths(item.displayWeight) + '% · ' + roundHundredths(item.scorePercent) + '% · ' + escapeHtml(formatPoints(item.assignment)) +
       '</small></span>';
@@ -1180,19 +1180,53 @@ function buildChartItems(assignments) {
   const hasWeights = positiveWeights.some((weight) => weight > 0);
   const weights = hasWeights ? positiveWeights : assignments.map(() => 1);
   const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
-  return assignments.map((item, index) => {
+  const groups = new Map();
+  assignments.forEach((item, index) => {
     const weight = weights[index];
-    return {
+    const displayWeight = hasWeights ? weight : 100 / assignments.length;
+    // Use the same two-decimal weight displayed in the table and legend.
+    const groupKey = roundHundredths(displayWeight);
+    if (!groups.has(groupKey)) groups.set(groupKey, []);
+    groups.get(groupKey).push({
       id: 'assignment-' + index,
       assignment: item,
       title: item.category || item.title || '未命名作业',
       description: item.title || '',
-      displayWeight: hasWeights ? weight : 100 / assignments.length,
+      displayWeight,
       share: weight / total,
       scorePercent: Number(item.scorePercent) || 0,
-      color: colors[index % colors.length],
       patternId: 'lossPattern' + index
-    };
+    });
+  });
+  // Keep each group's original order and fade from opaque to 35% opacity.
+  const items = [...groups.values()].flatMap((group, groupIndex) => group.map((item, index) => ({
+    ...item,
+    color: colors[groupIndex] || `hsl(${Math.round(groupIndex * 137.508) % 360} 70% 50%)`,
+    opacity: group.length === 1 ? 1 : 1 - 0.65 * index / (group.length - 1)
+  })));
+  ensureAdjacentChartContrast(items);
+  return items;
+}
+
+function ensureAdjacentChartContrast(items) {
+  // Check only sectors that can be drawn, including the circular last/first pair.
+  const visible = items.filter((item) => {
+    const span = item.share * 360;
+    const earned = span * clamp(item.scorePercent / 100, 0, 1);
+    return earned > 0.1 || span - earned > 0.1;
+  });
+  if (visible.length < 2) return;
+  const sameAppearance = (a, b) => a.color === b.color
+    && Math.round(a.opacity * 255) === Math.round(b.opacity * 255);
+  visible.forEach((item, index) => {
+    const previous = visible[(index + visible.length - 1) % visible.length];
+    if (!sameAppearance(item, previous)) return;
+    const next = visible[(index + 1) % visible.length];
+    // A long group can otherwise give neighbors the same displayed alpha value.
+    item.opacity = [1, 0.78, 0.56, 0.35].find((opacity) => {
+      const candidate = { color: item.color, opacity };
+      return !sameAppearance(candidate, previous) && !sameAppearance(candidate, next);
+    });
   });
 }
 
@@ -1254,6 +1288,7 @@ function createArcPath(cx, cy, outerRadius, innerRadius, startAngle, endAngle, f
   const safeEndAngle = endAngle - startAngle >= 359.99 ? startAngle + 359.99 : endAngle;
   path.setAttribute('d', donutSegmentPath(cx, cy, outerRadius, innerRadius, startAngle, safeEndAngle));
   path.setAttribute('fill', fill);
+  path.setAttribute('fill-opacity', String(item.opacity));
   path.setAttribute('tabindex', '0');
   path.setAttribute('data-chart-item', item.id);
   path.setAttribute('data-active', 'false');
