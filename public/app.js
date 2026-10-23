@@ -8,6 +8,7 @@ import { createRealtimeController, registerPushWorker } from './realtime-ui.js';
 import { getPredictionCategories, predictCourseScore } from './prediction.js';
 import { renderHistoryTooltip } from './history-tooltip.js';
 import { storeBrowserCredential } from './browser-credentials.js';
+import { createGradeCelebration } from './grade-celebration.js';
 
 const state = {
   grades: [],
@@ -103,6 +104,7 @@ const els = {
 };
 
 const CHANGELOG_API = 'https://api.github.com/repos/Whyyyn/This-is-Grade/commits?sha=main&per_page=100';
+const gradeCelebration = createGradeCelebration();
 const CHANGELOG_URL = 'https://github.com/Whyyyn/This-is-Grade/commits/main/';
 const PUSH_DEVICE_ID_KEY = 'grade-push-device-id';
 let pushRegistrationPromise = null;
@@ -1484,7 +1486,8 @@ function createHistorySnapshot() {
         title: item.title,
         earned: item.earned,
         possible: item.possible,
-        scorePercent: roundHundredths(item.scorePercent),
+        // Keep the exact mark: rounding 99.999% must not trigger a 100% celebration.
+        scorePercent: item.scorePercent,
         itemWeight: roundHundredths(item.itemWeight)
       }))
     }))
@@ -1579,6 +1582,7 @@ function averageForSubjects(snapshot, subjects) {
 }
 
 function showRevealModal(changes) {
+  gradeCelebration.reset();
   state.latestChanges = changes;
   state.revealedChanges = new Set();
   renderRevealList();
@@ -1613,8 +1617,11 @@ function renderRevealList() {
     secret.textContent = revealText(change);
     details.append(detailsSummary, secret);
     details.addEventListener('toggle', () => {
-      if (details.open) state.revealedChanges.add(index);
-      else state.revealedChanges.delete(index);
+      if (!details.isConnected || els.revealModal?.hidden) return;
+      if (details.open) {
+        state.revealedChanges.add(index);
+        gradeCelebration.reveal([change]);
+      } else state.revealedChanges.delete(index);
     });
     item.append(details);
     els.revealList.append(item);
@@ -2299,11 +2306,13 @@ els.historyDeleteButton?.addEventListener('click', async () => {
 });
 
 els.revealCloseButton?.addEventListener('click', () => {
+  gradeCelebration.dismiss();
   if (els.revealModal) els.revealModal.hidden = true;
 });
 
 els.revealAllButton?.addEventListener('click', () => {
   state.latestChanges.forEach((_, index) => state.revealedChanges.add(index));
+  gradeCelebration.reveal(state.latestChanges);
   renderRevealList();
 });
 
