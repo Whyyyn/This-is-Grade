@@ -9,6 +9,9 @@ import { getPredictionCategories, predictCourseScore } from './prediction.js';
 import { renderHistoryTooltip } from './history-tooltip.js';
 import { storeBrowserCredential } from './browser-credentials.js';
 import { createGradeCelebration } from './grade-celebration.js';
+import { diffGradeSnapshots } from './grade-changes.js';
+import { sanitizeSnapshot, historyPoints, historyEventsForPoint } from './grade-history.js';
+import { createScrapeController } from './scrape-ui.js';
 
 const state = {
   grades: [],
@@ -114,15 +117,10 @@ let settingsPreviousFocus = null;
 let settingsPreviousOverflow = '';
 let pushDeviceIdMemory = '';
 let changelogLoaded = false;
-let scrapeAttempt = 0;
 
 applyTheme(loadTheme(), false);
 applyMarketMode(loadMarketMode());
 applyEffortFeatureEnabled(loadEffortFeatureEnabled(), false);
-
-function roundTenths(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 10) / 10;
-}
 
 function roundCourseScore(value) {
   return Math.round(Number(value) + Number.EPSILON);
@@ -499,11 +497,11 @@ function normalizeSubjectKey(subject) {
 
 
 function normalizeAssignments(assignments) {
-  return sortEffortColumnsFirst(assignments.map((item, index) => {
+  return sortEffortColumnsFirst(assignments.map((item) => {
     const sourceAssignment = String(item.category || '').trim();
     const sourceDescription = String(item.title || '').trim();
     return {
-      id: String(item.id || index + 1),
+      id: String(item.id || ''),
       categoryId: String(item.categoryId || 'unknown'),
       category: sourceAssignment || sourceDescription || '未命名作业',
       title: sourceAssignment ? sourceDescription : '',
@@ -1357,8 +1355,8 @@ async function handleEncryptedHistory(email, password) {
     return;
   }
   try {
-    const records = await fetchEncryptedHistory();
     const snapshot = createHistorySnapshot();
+    const records = await fetchEncryptedHistory();
     if (!records.length) {
       const salt = randomBase64(16);
       const key = await deriveKey(email, password, salt);
@@ -1368,25 +1366,25 @@ async function handleEncryptedHistory(email, password) {
       return;
     }
 
-    const key = await deriveKey(email, password, records[0].salt);
-    const latest = await decryptSnapshot(records.at(-1), key);
-    const changes = compareSnapshots(latest, snapshot);
-    const decrypted = await decryptHistoryRecords(records, email, password);
-    const hasGradeChanges = hasSnapshotGradeChanges(latest, snapshot);
-    if (!hasGradeChanges) {
+    const keys = new Map();
+    const { snapshots: decrypted, latest } = await decryptHistoryRecords(records, email, password, keys);
+    const allChanges = diffGradeSnapshots(latest.grades, snapshot.grades);
+    if (!allChanges.length) {
       setHistoryStatus('没有发现成绩变化', 'ok');
       renderHistoryChart(decrypted);
       return;
     }
 
-    await saveEncryptedSnapshot(await encryptSnapshot(snapshot, key, records[0].salt));
+    const salt = records.at(-1).salt;
+    await saveEncryptedSnapshot(await encryptSnapshot(snapshot, keys.get(salt), salt));
     renderHistoryChart([...decrypted, snapshot]);
+    const changes = createRevealChanges(allChanges, latest, snapshot);
     if (!changes.length) {
       setHistoryStatus('成绩有变化，没有新增/删去成绩', 'ok');
       return;
     }
     setHistoryStatus('发现新增/删去成绩', 'ok');
-    showRevealModal(changes, latest, snapshot);
+    showRevealModal(changes);
   } catch (error) {
     if (error.name === 'OperationError') {
       setHistoryStatus('历史解不开，密码和第一次建立历史时不完全一样。', 'bad');
@@ -1398,7 +1396,7 @@ async function handleEncryptedHistory(email, password) {
 }
 
 async function fetchEncryptedHistory() {
-  const response = await fetch('/api/history?limit=120', { credentials: 'same-origin' });
+  const response = await fetch('/api/history?limit=120', { credentials: 'same-origin', signal: AbortSignal.timeout(15000) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || '历史功能暂时不可用');
   return Array.isArray(data.snapshots) ? data.snapshots : [];
@@ -1409,6 +1407,7 @@ async function saveEncryptedSnapshot(record) {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(15000),
     body: JSON.stringify(record)
   });
   const data = await response.json().catch(() => ({}));
@@ -1417,19 +1416,21 @@ async function saveEncryptedSnapshot(record) {
 }
 
 async function deleteEncryptedHistory() {
-  const response = await fetch('/api/history', { method: 'DELETE', credentials: 'same-origin' });
+  const response = await fetch('/api/history', { method: 'DELETE', credentials: 'same-origin', signal: AbortSignal.timeout(15000) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || '删除失败');
 }
 
-async function decryptHistoryRecords(records, email, password) {
+async function decryptHistoryRecords(records, email, password, keys = new Map()) {
   const snapshots = [];
-  const keys = new Map();
   for (const record of records) {
     if (!keys.has(record.salt)) keys.set(record.salt, await deriveKey(email, password, record.salt));
     snapshots.push(await decryptSnapshot(record, keys.get(record.salt)));
   }
-  return snapshots.sort((a, b) => new Date(a.capturedAt) - new Date(b.capturedAt));
+  // The comparison baseline is the newest server record, even if device clocks
+  // were wrong. Sort by capture time only for chart presentation.
+  const latest = snapshots.at(-1);
+  return { latest, snapshots: snapshots.sort((a, b) => new Date(a.capturedAt) - new Date(b.capturedAt)) };
 }
 
 async function deriveKey(email, password, saltBase64) {
@@ -1482,6 +1483,8 @@ function createHistorySnapshot() {
       subject: grade.subject,
       score: Number.isFinite(grade.score) ? roundHundredths(grade.score) : null,
       assignments: grade.assignments.map((item) => ({
+        id: item.id,
+        categoryId: item.categoryId,
         category: item.category,
         title: item.title,
         earned: item.earned,
@@ -1494,84 +1497,18 @@ function createHistorySnapshot() {
   });
 }
 
-function sanitizeSnapshot(snapshot) {
-  return {
-    capturedAt: String(snapshot?.capturedAt || new Date().toISOString()),
-    grades: Array.isArray(snapshot?.grades) ? snapshot.grades.map((grade) => ({
-      subject: String(grade.subject || '').trim(),
-      score: numericOrNull(grade.score),
-      assignments: Array.isArray(grade.assignments) ? grade.assignments.map((item) => ({
-        category: String(item.category || '').trim() || String(item.title || '').trim() || '未命名作业',
-        title: String(item.title || '').trim(),
-        earned: numericOrNull(item.earned),
-        possible: numericOrNull(item.possible),
-        scorePercent: Number(item.scorePercent),
-        itemWeight: Number(item.itemWeight) || 0
-      })).filter((item) => Number.isFinite(item.scorePercent)) : []
-    })).filter((grade) => grade.subject && (grade.score !== null || grade.assignments.length)) : []
-  };
-}
-
-function compareSnapshots(oldSnapshot, newSnapshot) {
-  const changes = [];
-  const oldCourses = new Map(oldSnapshot.grades.map((grade) => [grade.subject, grade]));
+function createRevealChanges(changes, oldSnapshot, newSnapshot) {
   const selectedSubjects = [...state.selected];
   const oldAverage = averageForSubjects(oldSnapshot, selectedSubjects);
   const newAverage = averageForSubjects(newSnapshot, selectedSubjects);
-  for (const newCourse of newSnapshot.grades) {
-    const oldCourse = oldCourses.get(newCourse.subject);
-    if (!oldCourse) continue;
-    const oldAssignments = new Map(oldCourse.assignments.map((item) => [assignmentKey(item), item]));
-    const newAssignments = new Map(newCourse.assignments.map((item) => [assignmentKey(item), item]));
-    for (const item of newCourse.assignments) {
-      const oldItem = oldAssignments.get(assignmentKey(item));
-      if (!oldItem) {
-        changes.push(createChange('new-assignment', newCourse.subject, item.category || item.title, oldCourse, newCourse, null, item, oldAverage, newAverage));
-      }
-    }
-    for (const item of oldCourse.assignments) {
-      if (!newAssignments.has(assignmentKey(item))) {
-        changes.push(createChange('deleted-assignment', newCourse.subject, item.category || item.title, oldCourse, newCourse, item, null, oldAverage, newAverage));
-      }
-    }
-  }
-  return changes;
-}
-
-function hasSnapshotGradeChanges(oldSnapshot, newSnapshot) {
-  const oldCourses = new Map(oldSnapshot.grades.map((grade) => [grade.subject, grade]));
-  const newCourses = new Map(newSnapshot.grades.map((grade) => [grade.subject, grade]));
-  if (oldCourses.size !== newCourses.size) return true;
-  for (const [subject, newCourse] of newCourses) {
-    const oldCourse = oldCourses.get(subject);
-    if (!oldCourse) return true;
-    if (valueChanged(newCourse.score, oldCourse.score)) return true;
-    const oldAssignments = new Map(oldCourse.assignments.map((item) => [assignmentKey(item), item]));
-    const newAssignments = new Map(newCourse.assignments.map((item) => [assignmentKey(item), item]));
-    if (oldAssignments.size !== newAssignments.size) return true;
-    for (const [key, newItem] of newAssignments) {
-      const oldItem = oldAssignments.get(key);
-      if (!oldItem) return true;
-      if (Math.abs((newItem.scorePercent || 0) - (oldItem.scorePercent || 0)) >= 0.01) return true;
-      if (Math.abs((newItem.itemWeight || 0) - (oldItem.itemWeight || 0)) >= 0.01) return true;
-      if (valueChanged(newItem.earned, oldItem.earned)) return true;
-      if (valueChanged(newItem.possible, oldItem.possible)) return true;
-    }
-  }
-  return false;
-}
-
-function valueChanged(nextValue, previousValue) {
-  if (nextValue === null || previousValue === null) return nextValue !== previousValue;
-  return Math.abs(Number(nextValue) - Number(previousValue)) >= 0.01;
-}
-
-function createChange(type, subject, title, oldCourse, newCourse, oldItem, newItem, oldAverage, newAverage) {
-  return { type, subject, title, oldCourse, newCourse, oldItem, newItem, oldAverage, newAverage };
-}
-
-function assignmentKey(item) {
-  return normalizeSubjectKey((item.category || '') + '|' + (item.title || ''));
+  return changes.filter((change) => ['assignment-added', 'assignment-removed'].includes(change.type)
+    && change.oldCourse && change.newCourse).map((change) => ({
+      ...change,
+      type: change.type === 'assignment-added' ? 'new-assignment' : 'deleted-assignment',
+      title: change.label,
+      oldAverage,
+      newAverage
+    }));
 }
 
 function averageForSubjects(snapshot, subjects) {
@@ -1684,15 +1621,7 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
   }
 
   const subject = state.historySubject;
-  const points = [];
-  for (const snapshot of snapshots) {
-    const grade = snapshot.grades.find((item) => item.subject === subject);
-    if (!grade || !Number.isFinite(grade.score)) continue;
-    const previousPoint = points.at(-1);
-    if (!previousPoint || Math.abs(grade.score - previousPoint.score) >= 0.01) {
-      points.push({ snapshot, score: grade.score });
-    }
-  }
+  const points = historyPoints(snapshots, subject);
   if (!points.length) {
     els.historyChart.removeAttribute('data-tone');
     els.historyChart.innerHTML = `<p class="muted chart-empty">${escapeHtml(subject)} 暂无历史记录。</p>`;
@@ -1819,39 +1748,6 @@ function renderHistorySummary(points, periodDelta) {
     <strong>${roundHundredths(latest.score)}%</strong>
     <span>${formatSignedScore(latestDelta)} 本次</span>
     <small>${formatSignedScore(periodDelta)} 区间 · ${points.length} 个节点</small>`;
-}
-
-function historyEventsForPoint(points, index, subject) {
-  const current = points[index]?.snapshot;
-  const previous = points[index - 1]?.snapshot;
-  if (!current) return [];
-  if (!previous) return [{ type: 'note', text: '建立历史基准' }];
-  const currentGrade = current.grades.find((grade) => grade.subject === subject);
-  const previousGrade = previous.grades.find((grade) => grade.subject === subject);
-  if (!currentGrade || !previousGrade) return [{ type: 'note', text: '科目开始出现在历史记录中' }];
-
-  const events = [];
-  const oldAssignments = new Map(previousGrade.assignments.map((item) => [assignmentKey(item), item]));
-  const newAssignments = new Map(currentGrade.assignments.map((item) => [assignmentKey(item), item]));
-  for (const [key, item] of newAssignments) {
-    const oldItem = oldAssignments.get(key);
-    const title = historyAssignmentName(item);
-    if (!oldItem) {
-      events.push({ type: 'added', title, after: `${roundHundredths(item.scorePercent)}%`, text: `新增「${title}」：${roundHundredths(item.scorePercent)}%` });
-      continue;
-    }
-    if (valueChanged(item.scorePercent, oldItem.scorePercent)) events.push({ type: 'score', title, before: `${roundHundredths(oldItem.scorePercent)}%`, after: `${roundHundredths(item.scorePercent)}%`, text: `「${title}」改分：${roundHundredths(oldItem.scorePercent)}% → ${roundHundredths(item.scorePercent)}%` });
-    if (valueChanged(item.earned, oldItem.earned) || valueChanged(item.possible, oldItem.possible)) events.push({ type: 'points', title, before: formatSnapshotPoints(oldItem), after: formatSnapshotPoints(item), text: `「${title}」得分更新：${formatSnapshotPoints(oldItem)} → ${formatSnapshotPoints(item)}` });
-    if (valueChanged(item.itemWeight, oldItem.itemWeight)) events.push({ type: 'weight', title, before: `${roundHundredths(oldItem.itemWeight)}%`, after: `${roundHundredths(item.itemWeight)}%`, text: `「${title}」权重更新：${roundHundredths(oldItem.itemWeight)}% → ${roundHundredths(item.itemWeight)}%` });
-  }
-  for (const [key, item] of oldAssignments) {
-    if (!newAssignments.has(key)) events.push({ type: 'removed', title: historyAssignmentName(item), after: `${roundHundredths(item.scorePercent)}%`, text: `移除「${historyAssignmentName(item)}」` });
-  }
-  return events.length ? events : [{ type: 'note', text: '本次快照没有可识别的作业事件' }];
-}
-
-function historyAssignmentName(item) {
-  return item.title || item.category || '未命名成绩';
 }
 
 function bindHistoryPointTooltips(points, subject) {
@@ -2099,46 +1995,57 @@ els.credentialNoticeClose.addEventListener('click', () => {
   els.credentialNotice.hidden = true;
 });
 
-els.form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const attempt = ++scrapeAttempt;
-  els.credentialNotice.hidden = true;
-  setStatus('抓取中');
-  const email = els.email.value.trim();
-  const password = normalizePasswordForHistory(els.password.value);
-  try {
+const scrapeController = createScrapeController({
+  async scrape(inputs, signal) {
     const response = await fetch('/api/scrape', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password,
-        realtimeDeviceId: els.realtimeFeatureToggle?.checked ? getPushDeviceId(false) : ''
-      })
+      body: JSON.stringify(inputs),
+      signal
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '抓取失败');
+    return { grades: data, historyDisabled: Boolean(response.headers.get('X-History-Disabled')) };
+  },
+  updateGrades(grades) {
     state.effortIsDemo = false;
     state.effortDemoBackup = null;
     updateEffortDemoControls();
-    updateGrades(data);
-    setStatus('抓取完成', 'ok');
-    void storeBrowserCredential(email, password).then((result) => {
-      if (attempt !== scrapeAttempt || !['timeout', 'failed'].includes(result)) return;
-      els.credentialNoticeMessage.textContent = result === 'timeout'
-        ? '成绩已更新。浏览器保存密码尚未完成，不影响继续查看成绩。'
-        : '成绩已更新。浏览器未能保存密码，下次登录时可能需要重新输入。';
-      els.credentialNotice.hidden = false;
-    });
-    if (response.headers.get('X-History-Disabled')) {
-      setHistoryStatus('历史功能需要配置 SESSION_SECRET', 'bad');
-    } else {
-      await handleEncryptedHistory(email, password);
-    }
-  } catch (error) {
-    setStatus(error.message, 'bad');
+    updateGrades(grades);
+  },
+  async updateHistory({ email, password }, { historyDisabled }) {
+    if (historyDisabled) setHistoryStatus('历史功能需要配置 SESSION_SECRET', 'bad');
+    else await handleEncryptedHistory(email, password);
+  },
+  saveCredential: storeBrowserCredential,
+  onStart() {
+    els.credentialNotice.hidden = true;
+    setStatus('抓取中');
+  },
+  onSuccess: () => setStatus('抓取完成', 'ok'),
+  onNotice(result) {
+    els.credentialNoticeMessage.textContent = result === 'timeout'
+      ? '成绩已更新。浏览器保存密码尚未完成，不影响继续查看成绩。'
+      : '成绩已更新。浏览器未能保存密码，下次登录时可能需要重新输入。';
+    els.credentialNotice.hidden = false;
+  },
+  onError: (error) => setStatus(error.message || '抓取失败', 'bad'),
+  onBusy(busy) {
+    els.form.setAttribute('aria-busy', String(busy));
+    els.form.querySelector('button[type="submit"]').disabled = busy;
+    els.refreshButton.disabled = busy;
+    if (els.historyDeleteButton) els.historyDeleteButton.disabled = busy;
   }
+});
+
+els.form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  void scrapeController.submit({
+    email: els.email.value.trim(),
+    password: normalizePasswordForHistory(els.password.value),
+    realtimeDeviceId: els.realtimeFeatureToggle?.checked ? getPushDeviceId(false) : ''
+  });
 });
 
 els.predictionCourse?.addEventListener('change', () => {

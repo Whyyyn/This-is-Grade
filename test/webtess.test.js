@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 
 import { extractGradebookButtons, parseGradebookSummary } from '../functions/_lib/webtess.js';
 
+test('assignments without upstream IDs do not use unstable row numbers as IDs', () => {
+  const parsed = parseGradebookSummary(gradebookTable('Math', '85', [
+    { column: 'Week 1', description: 'Homework', weight: '10', mark: '8', possible: '10', percent: '80' },
+    { column: 'Week 2', description: 'Homework', weight: '10', mark: '9', possible: '10', percent: '90' }
+  ]));
+  assert.deepEqual(parsed.assignments.map((item) => item.id), ['', '']);
+});
+
 function gradebookTable(summaryTitle, summaryMark, assignments) {
   const assignmentRows = assignments.map((item) => `
     <tr>

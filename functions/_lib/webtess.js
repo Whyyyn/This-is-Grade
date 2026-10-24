@@ -204,10 +204,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function compactSnippet(text) {
-  return cleanHtml(text).slice(0, 180) || String(text || '').replace(/\s+/g, ' ').trim().slice(0, 180);
-}
-
 function storeCookies(headers, cookies) {
   const values = typeof headers.getSetCookie === 'function'
     ? headers.getSetCookie()
@@ -361,7 +357,7 @@ function parseDelimitedAssignmentItems(text) {
     if ((!assignment && !description) || !Number.isFinite(itemWeight) || !Number.isFinite(scorePercent)) continue;
 
     items.push({
-      id: cleanPublishedField(fields[1]) || String(items.length + 1),
+      id: cleanPublishedField(fields[1]),
       categoryId: cleanPublishedField(fields[3]) || 'unknown',
       category: assignment || description || '未命名作业',
       title: assignment ? description : '',
@@ -416,7 +412,7 @@ function parseAssignmentTable(html) {
 
     const rowHtml = row.html;
     items.push({
-      id: extractRowIdentifier(rowHtml, ['assignment', 'item', 'mark']) || String(items.length + 1),
+      id: extractRowIdentifier(rowHtml, ['assignment', 'item', 'mark']),
       categoryId: extractRowIdentifier(rowHtml, ['category', 'column', 'group']) || 'unknown',
       category: assignment,
       title: description,

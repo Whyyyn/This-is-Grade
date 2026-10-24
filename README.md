@@ -123,6 +123,22 @@ session cookies, and decrypted grades must never be written to application logs.
 
 History snapshots are encrypted in the browser with AES-GCM. The AES key is derived with PBKDF2 from the WebTESS email and password plus a random salt. D1 stores only `user_id`, `created_at`, `salt`, `iv`, `ciphertext`, and `schema_version`.
 
+## Change Tracking and Refreshes
+
+Browser history and background notifications share the comparison engine in
+`public/grade-changes.js`. New history retains upstream assignment IDs; older
+records without IDs use text matching that preserves repeated assignment names.
+Rows without upstream IDs keep an empty ID rather than an unstable row number.
+History chart points include assignment changes even when the course total is flat.
+
+Refresh submissions run one at a time through history saving, so overlapping
+requests cannot replace grades or switch the session during a history write.
+Scrapes time out after 90 seconds; individual history requests after 15 seconds.
+History derives each encryption key once per salt per refresh.
+
+Run `npm test` for parser, change tracking, refresh coordination, prediction,
+credential, and notification regression tests. These tests use synthetic data.
+
 ## Realtime notification setup
 
 Realtime notification setup now displays the invitation field and unmet

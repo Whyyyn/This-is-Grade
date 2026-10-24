@@ -1,3 +1,6 @@
+import { diffGradeSnapshots } from '../../public/grade-changes.js';
+export { diffGradeSnapshots };
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -55,37 +58,10 @@ export function compactGradeSnapshot(grades) {
       title: String(item?.title || '').trim().slice(0, 240),
       earned: nullableRoundedNumber(item?.earned),
       possible: nullableRoundedNumber(item?.possible),
-      scorePercent: roundedNumber(item?.scorePercent)
+      scorePercent: roundedNumber(item?.scorePercent),
+      ...(item?.itemWeight !== undefined ? { itemWeight: nullableRoundedNumber(item.itemWeight) } : {})
     }))
   })).filter((grade) => grade.subject && (grade.score !== null || grade.assignments.length));
-}
-
-export function diffGradeSnapshots(previous, current) {
-  const beforeCourses = new Map((previous || []).map((grade) => [normalize(grade.subject), grade]));
-  const changes = [];
-
-  for (const grade of current || []) {
-    const before = beforeCourses.get(normalize(grade.subject));
-    if (!before) {
-      changes.push({ type: 'course-added', subject: grade.subject, label: '课程成绩', before: null, after: grade.score });
-      continue;
-    }
-    if (differentNumber(before.score, grade.score)) {
-      changes.push({ type: 'course-score', subject: grade.subject, label: '总评', before: before.score, after: grade.score });
-    }
-
-    const beforeItems = new Map((before.assignments || []).map((item) => [assignmentKey(item), item]));
-    for (const item of grade.assignments || []) {
-      const prior = beforeItems.get(assignmentKey(item));
-      const label = item.category || item.title || '成绩项目';
-      if (!prior) {
-        changes.push({ type: 'assignment-added', subject: grade.subject, label, before: null, after: item.scorePercent });
-      } else if (differentNumber(prior.scorePercent, item.scorePercent)) {
-        changes.push({ type: 'assignment-score', subject: grade.subject, label, before: prior.scorePercent, after: item.scorePercent });
-      }
-    }
-  }
-  return changes.slice(0, 12);
 }
 
 export function isRealtimeCheckDue(row, now = new Date()) {
@@ -100,7 +76,13 @@ export function createGradeChangePayload(changes) {
   const shown = (changes || []).slice(0, 2);
   const body = shown.map((change) => {
     const prefix = `${change.subject} · ${change.label}`;
-    if (change.before === null) return `${prefix}：新增 ${displayScore(change.after)}`;
+    if (change.type.endsWith('-removed')) return `${prefix}：已移除`;
+    if (change.type.endsWith('-added')) return `${prefix}：新增 ${displayScore(change.after)}`;
+    if (change.type === 'assignment-points') {
+      const points = (value) => `${value.earned ?? '—'} / ${value.possible ?? '—'}`;
+      return `${prefix}：得分 ${points(change.before)} → ${points(change.after)}`;
+    }
+    if (change.type === 'assignment-weight') return `${prefix}：权重 ${displayScore(change.before)} → ${displayScore(change.after)}`;
     return `${prefix}：${displayScore(change.before)} → ${displayScore(change.after)}`;
   }).join('；');
   const remaining = Math.max(0, (changes || []).length - shown.length);
@@ -110,21 +92,6 @@ export function createGradeChangePayload(changes) {
     tag: `grade-change-${Date.now()}`,
     url: '/'
   };
-}
-
-function assignmentKey(item) {
-  const id = String(item?.id || '').trim();
-  if (id) return `id:${id}`;
-  return `text:${normalize(item?.category)}|${normalize(item?.title)}`;
-}
-
-function normalize(value) {
-  return String(value || '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function differentNumber(a, b) {
-  if (a === null || b === null) return a !== b;
-  return Math.abs(Number(a) - Number(b)) >= 0.005;
 }
 
 function roundedNumber(value) {
