@@ -126,6 +126,7 @@ async function sendRealtimeNotification(db, row, payload) {
 }
 
 function classifyRealtimeError(error) {
+  if (['login_required', 'courses_not_found'].includes(error?.code)) return 'login_or_session';
   const text = String(error?.message || '').toLowerCase();
   if (text.includes('no gradebook') || text.includes('logged in')) return 'login_or_session';
   if (text.includes('decrypt') || text.includes('operationerror')) return 'encrypted_state';

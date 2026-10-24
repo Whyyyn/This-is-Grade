@@ -10,13 +10,39 @@ const BASE_HEADERS = {
   'Pragma': 'no-cache'
 };
 
+const ERROR_DETAILS = {
+  missing_credentials: [400, '请填写 WebTESS 邮箱和密码。'],
+  invalid_url: [400, 'WebTESS 查询地址无效。'],
+  upstream_timeout: [504, '连接 WebTESS 超时，请稍后重试。'],
+  upstream_network: [502, '查询服务器无法连接 WebTESS，请稍后重试。'],
+  upstream_denied: [502, 'WebTESS 拒绝了查询服务器的访问，请稍后重试；可先到官网查看成绩。'],
+  upstream_rate_limited: [503, 'WebTESS 暂时限制了查询频率，请稍后再试。'],
+  upstream_http: [502, 'WebTESS 返回异常响应，请稍后重试。'],
+  upstream_redirect: [502, 'WebTESS 跳转异常，请稍后重试。'],
+  login_required: [401, '未能建立 WebTESS 登录会话。请确认登录信息；若官网能正常登录，可能是查询服务与官网的登录流程不兼容。'],
+  courses_not_found: [502, '未能读取 WebTESS 课程列表，可能是官网页面发生变化，请稍后重试。'],
+  marks_not_found: [502, '已读取课程，但未能读取已发布成绩，可能是成绩尚未发布或官网格式发生变化。']
+};
+
+export class WebtessError extends Error {
+  constructor(code, { stage, upstreamStatus, cause } = {}) {
+    const [status, message] = ERROR_DETAILS[code];
+    super(message, { cause });
+    this.name = 'WebtessError';
+    this.code = code;
+    this.status = status;
+    this.stage = stage;
+    this.upstreamStatus = upstreamStatus;
+  }
+}
+
 export async function scrapeGrades(options) {
   const result = await scrapeGradesWithSession(options);
   return result.grades;
 }
 
 export async function scrapeGradesWithSession({ email, password, sessionCookie = '', url = DEFAULT_URL }) {
-  if (!sessionCookie && (!email || !password)) throw new Error('Missing WebTESS credentials.');
+  if (!sessionCookie && (!email || !password)) throw new WebtessError('missing_credentials');
   const session = createCookieSession(sessionCookie);
   const parentUrl = normalizeParentUrl(url);
   const loginBody = new URLSearchParams({
@@ -41,7 +67,7 @@ export async function scrapeGradesWithSession({ email, password, sessionCookie =
           'Origin': 'https://harts.systems',
           'Referer': 'https://harts.systems/webtess/parent.jsp'
         }
-      });
+      }, 'login');
       authenticatedWithPassword = true;
       courses = await fetchCourses(session, parentUrl, attempt);
       if (courses.length) break;
@@ -50,13 +76,13 @@ export async function scrapeGradesWithSession({ email, password, sessionCookie =
   }
 
   if (!courses.length) {
-    throw new Error('Logged in, but no gradebook courses were found. Try again in a few seconds.');
+    throw new WebtessError('courses_not_found', { stage: 'courses' });
   }
 
   const results = await Promise.all(courses.map((course) => fetchCourseGrade(session, course)));
   const grades = results.filter((result) => result.score !== null || result.assignments.length);
   if (!grades.length) {
-    throw new Error('Found WebTESS courses, but gradebook returned no published marks.');
+    throw new WebtessError('marks_not_found', { stage: 'gradebook' });
   }
   return {
     grades: dedupeGrades(grades),
@@ -71,8 +97,27 @@ async function fetchCourses(session, url, attempt) {
       ...BASE_HEADERS,
       'Referer': LOGIN_URL
     }
-  });
-  return extractGradebookButtons(await parentResponse.text());
+  }, 'courses');
+  const html = await readResponseText(parentResponse, 'courses');
+  // An expired saved session may still be recovered by logging in below.
+  if (attempt >= 3) assertNotLoginPage(html, 'courses');
+  return extractGradebookButtons(html);
+}
+
+async function readResponseText(response, stage) {
+  try {
+    return await response.text();
+  } catch (cause) {
+    const timedOut = cause?.name === 'TimeoutError' || cause?.name === 'AbortError';
+    throw new WebtessError(timedOut ? 'upstream_timeout' : 'upstream_network', { stage, cause });
+  }
+}
+
+function assertNotLoginPage(html, stage) {
+  if (/<form\b[^>]*\b(?:name|id)\s*=\s*["']webgenstart["']/i.test(html)
+      && /<input\b[^>]*\btype\s*=\s*["']password["']/i.test(html)) {
+    throw new WebtessError('login_required', { stage });
+  }
 }
 
 function createCookieSession(initialCookie = '') {
@@ -82,18 +127,27 @@ function createCookieSession(initialCookie = '') {
     cookieHeader() {
       return [...cookies.entries()].map(([key, value]) => key + '=' + value).join('; ');
     },
-    async request(input, options = {}) {
+    async request(input, options = {}, stage, redirects = 0) {
       const target = new URL(input);
-      if (target.origin !== 'https://harts.systems') throw new Error('Unexpected WebTESS request destination.');
+      if (target.origin !== 'https://harts.systems' || redirects > 5) {
+        throw new WebtessError('upstream_redirect', { stage });
+      }
       const headers = new Headers(options.headers || {});
       if (cookies.size) {
         headers.set('Cookie', [...cookies.entries()].map(([key, value]) => key + '=' + value).join('; '));
       }
-      const response = await fetch(target.href, {
-        ...options,
-        headers,
-        redirect: 'manual'
-      });
+      let response;
+      try {
+        response = await fetch(target.href, {
+          ...options,
+          headers,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(15000)
+        });
+      } catch (cause) {
+        const timedOut = cause?.name === 'TimeoutError' || cause?.name === 'AbortError';
+        throw new WebtessError(timedOut ? 'upstream_timeout' : 'upstream_network', { stage, cause });
+      }
       storeCookies(response.headers, cookies);
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.get('location');
@@ -101,8 +155,13 @@ function createCookieSession(initialCookie = '') {
           return this.request(new URL(location, target).href, {
             method: 'GET',
             headers: options.headers
-          });
+          }, stage, redirects + 1);
         }
+      }
+      if (!response.ok) {
+        const code = response.status === 429 ? 'upstream_rate_limited'
+          : [401, 403].includes(response.status) ? 'upstream_denied' : 'upstream_http';
+        throw new WebtessError(code, { stage, upstreamStatus: response.status });
       }
       return response;
     }
@@ -110,9 +169,14 @@ function createCookieSession(initialCookie = '') {
 }
 
 function normalizeParentUrl(value) {
-  const url = new URL(value || DEFAULT_URL);
+  let url;
+  try {
+    url = new URL(value || DEFAULT_URL);
+  } catch {
+    throw new WebtessError('invalid_url');
+  }
   if (url.origin !== 'https://harts.systems' || !url.pathname.startsWith('/webtess/')) {
-    throw new Error('Invalid WebTESS URL.');
+    throw new WebtessError('invalid_url');
   }
   return url.href;
 }
@@ -197,8 +261,9 @@ async function fetchCourseGrade(session, course) {
   const response = await session.request(DETAIL_API_URL + '?' + params, {
     method: 'POST',
     headers: { ...BASE_HEADERS, 'Referer': DEFAULT_URL }
-  });
-  const text = await response.text();
+  }, 'gradebook');
+  const text = await readResponseText(response, 'gradebook');
+  assertNotLoginPage(text, 'gradebook');
   const parsed = parseGradebookSummary(text);
   return {
     subject: course.subject || parsed.subject,

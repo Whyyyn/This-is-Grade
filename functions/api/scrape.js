@@ -1,4 +1,4 @@
-import { scrapeGradesWithSession } from '../_lib/webtess.js';
+import { scrapeGradesWithSession, WebtessError } from '../_lib/webtess.js';
 import { createUserSession } from '../_lib/auth.js';
 import { compactGradeSnapshot, requireRealtimeSecret, sealRealtimeState } from '../_lib/realtime.js';
 
@@ -32,7 +32,14 @@ export async function onRequestPost(context) {
     }
     return json(grades, 200, extraHeaders);
   } catch (error) {
-    return json({ error: safeError(error) }, error.status || 500);
+    const known = error instanceof WebtessError;
+    const code = known ? error.code : 'internal_error';
+    // Log only controlled metadata: upstream HTML/errors may contain credentials or grades.
+    console.warn('webtess_scrape_failed', {
+      code,
+      ...(known ? { stage: error.stage, upstreamStatus: error.upstreamStatus } : {})
+    });
+    return json({ error: known ? error.message : '查询服务暂时异常，请稍后重试。', code }, known ? error.status : 500);
   }
 }
 
@@ -68,10 +75,6 @@ function json(data, status = 200, extraHeaders = {}) {
     status,
     headers: { ...jsonHeaders, ...corsHeaders(), ...extraHeaders }
   });
-}
-
-function safeError(error) {
-  return '抓取失败，请检查 WebTESS 登录信息后重试。';
 }
 
 function corsHeaders() {
