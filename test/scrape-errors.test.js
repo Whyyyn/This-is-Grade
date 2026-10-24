@@ -93,6 +93,25 @@ test('does not expose unexpected server exception details', async (t) => {
   assert.deepEqual(await response.json(), { error: '查询服务暂时异常，请稍后重试。', code: 'internal_error' });
 });
 
+test('queries the gradebook with the current dataset button parameters', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const target = new URL(url);
+    if (target.pathname.endsWith('/gradebook')) {
+      assert.equal(options.method, 'POST');
+      assert.deepEqual(Object.fromEntries(target.searchParams), {
+        mode: 'get_published_marks_by_student', stid: '101', masid: '201', crsid: '301', crsnum: '01234'
+      });
+      return new Response('<stavg>91.5</stavg>');
+    }
+    return new Response(`<table><tr><td><input type="button" data-personid="101" data-masid="201"
+      data-crsid="301" data-crsnum="01234" onclick="getGradebookByStudent(this);"></td><td>Example Math</td></tr></table>`);
+  });
+  const result = await scrapeGradesWithSession(credentials);
+  assert.equal(result.grades.length, 1);
+  assert.equal(result.grades[0].subject, 'Example Math');
+  assert.equal(result.grades[0].score, 91.5);
+});
+
 test('classifies a timeout while receiving the course page body', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url) => url.includes('/login')
     ? new Response('ok')

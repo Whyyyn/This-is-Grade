@@ -44,6 +44,37 @@ test('extracts the first course name from its own row inside the parent layout t
   ]);
 });
 
+test('extracts dataset parameters from the current WebTESS course buttons', () => {
+  const html = `<table><tr><td>School</td><td><table>
+    <tr class="tableRow1 p-crsrow">
+      <td><div><input type="button" name="grdbuttons" data-personid="101" data-masid="201"
+        data-crsid="301" data-crsnum="01234" onClick="getGradebookByStudent(this);" value="01234"></div></td>
+      <td>Example Math</td><td>12A</td><td>Teacher</td>
+    </tr>
+    <tr><td colspan="25"><div id="pubmarks201"><table></table></div></td></tr>
+    <tr><td><input data-crsnum='5678' data-crsid='302' data-masid='202' data-personid='101'
+      onclick='return getGradebookByStudent ( this );'></td><td>Example English</td></tr>
+  </table></td></tr></table>`;
+  assert.deepEqual(extractGradebookButtons(html), [
+    { subject: 'Example Math', stid: '101', masid: '201', crsid: '301', crsnum: '01234' },
+    { subject: 'Example English', stid: '101', masid: '202', crsid: '302', crsnum: '5678' }
+  ]);
+});
+
+test('reads mixed legacy and dataset buttons without duplicating requests or accepting incomplete data', () => {
+  const html = `<table>
+    <tr><td><input data-personid=101 data-masid=201 data-crsid=301 data-crsnum=1234
+      onclick="getGradebookByStudent(this);"></td><td>Math</td></tr>
+    <tr><td><button onclick="getGradebookByStudent('101,201,301,1234')">1234</button></td><td>Math</td></tr>
+    <tr><td><button onclick="getGradebookByStudent ( &quot;101,202,302,5678&quot; )">5678</button></td><td>English</td></tr>
+    <tr><td><input data-personid=101 data-masid=203 data-crsid=303 onclick="getGradebookByStudent(this);"></td><td>Incomplete</td></tr>
+    <tr><td><input data-personid=101 data-masid=204 data-crsid=304 data-crsnum=9012 onclick="getAssessByClass(this);"></td><td>Unrelated</td></tr>
+  </table>`;
+  assert.deepEqual(extractGradebookButtons(html).map(({ subject, crsnum }) => ({ subject, crsnum })), [
+    { subject: 'Math', crsnum: '1234' }, { subject: 'English', crsnum: '5678' }
+  ]);
+});
+
 test('keeps assignments when a renamed gradebook has no published course average', () => {
   const parsed = parseGradebookSummary(gradebookTable('English Studies 12B', '', [
     { column: 'Week 1', description: 'Learning Behaviors and CC', weight: '4.44', mark: '5', possible: '5', percent: '100' },

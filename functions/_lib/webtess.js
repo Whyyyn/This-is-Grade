@@ -226,26 +226,36 @@ function splitSetCookieHeader(header) {
 
 export function extractGradebookButtons(html) {
   const courses = [];
-  const source = String(html);
-  const lowerSource = source.toLowerCase();
-  const buttonPattern = /getGradebookByStudent\('([^']+)'\)/gi;
-  let match;
-  while ((match = buttonPattern.exec(source))) {
-    const rowStart = lowerSource.lastIndexOf('<tr', match.index);
-    const rowEnd = lowerSource.indexOf('</tr>', match.index + match[0].length);
-    if (rowStart < 0 || rowEnd < 0) continue;
-
-    const rowHtml = source.slice(rowStart, rowEnd + '</tr>'.length);
-    const params = match[1].split(',').map((part) => part.trim());
-    if (params.length < 4) continue;
-    const cells = [...rowHtml.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((cell) => cleanHtml(cell[1]));
-    courses.push({
-      subject: cells[1] || cells.find(Boolean) || 'Course ' + params[3],
-      stid: params[0],
-      masid: params[1],
-      crsid: params[2],
-      crsnum: params[3]
-    });
+  const seen = new Set();
+  for (const row of extractLeafTableRows(html)) {
+    const cells = [...row.innerHtml.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)]
+      .map((cell) => cleanHtml(cell[1]));
+    for (const [tag] of row.innerHtml.matchAll(/<(?:input|button|a)\b[^>]*>/gi)) {
+      const attributes = new Map([...tag.matchAll(/\b(onclick|data-personid|data-masid|data-crsid|data-crsnum)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi)]
+        .map((match) => [match[1].toLowerCase(), decodeHtmlEntities(match[2] ?? match[3] ?? match[4])]));
+      const handler = attributes.get('onclick') || '';
+      let params;
+      if (/\bgetGradebookByStudent\s*\(\s*this\s*\)/i.test(handler)) {
+        // WebTESS now passes the button itself and reads its dataset (15 Oct 2026).
+        params = ['data-personid', 'data-masid', 'data-crsid', 'data-crsnum']
+          .map((name) => attributes.get(name)?.trim());
+      } else {
+        const legacy = handler.match(/\bgetGradebookByStudent\s*\(\s*(['"])([^'"]+)\1\s*\)/i);
+        if (!legacy) continue;
+        params = legacy[2].split(',').map((part) => part.trim());
+      }
+      if (params.length < 4 || params.slice(0, 4).some((part) => !part)) continue;
+      const key = JSON.stringify(params.slice(0, 4));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      courses.push({
+        subject: cells[1] || cells.find(Boolean) || 'Course ' + params[3],
+        stid: params[0],
+        masid: params[1],
+        crsid: params[2],
+        crsnum: params[3]
+      });
+    }
   }
   return courses;
 }
