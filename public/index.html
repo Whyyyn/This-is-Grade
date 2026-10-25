@@ -1,19 +1,34 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="sterile">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#050505" />
+    <meta name="theme-color" content="#fafafa" />
     <title>This is Grade</title>
     <link rel="icon" href="./assets/grade-icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./onboarding.css" />
+    <link rel="stylesheet" href="./sterile-theme.css" />
   </head>
   <body>
-    <main class="shell">
+    <header class="sterile-only sterile-masthead">
+      <div class="sterile-masthead-inner">
+        <a class="sterile-brand" href="#overview"><span class="sterile-mark" aria-hidden="true">g.</span>This is Grade</a>
+        <nav class="sterile-nav" aria-label="成绩工作台导航">
+          <a href="#overview" aria-current="location">概览</a>
+          <a href="#gradeDetails">科目明细</a>
+          <a href="#gradeHistory">成绩走势</a>
+          <a href="#gradePrediction">成绩预测</a>
+        </nav>
+        <button class="sterile-guide" type="button" data-open-onboarding><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2l-1.5 1v1M12 17h.01"/></svg>使用指南</button>
+      </div>
+    </header>
+    <main class="shell" id="overview">
       <section class="topbar">
         <div>
-          <h1>This is Grade<span>.pages.dev</span></h1>
+          <h1 class="original-title">This is Grade<span>.pages.dev</span></h1>
+          <h1 class="sterile-only sterile-title">成绩总览</h1>
           <pre class="hacker-banner" aria-hidden="true">+--------------------------------------+
 | THIS_IS_GRADE :: GREEN TERMINAL      |
 | STATUS: ONLINE  /  ACCESS: GRANTED   |
@@ -21,39 +36,45 @@
         </div>
         <div class="top-actions">
           <button id="settingsButton" class="icon-button" type="button" title="外观设置" aria-label="打开外观设置" aria-haspopup="dialog">
-            <span>⚙</span>
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 4 .5-2h4l.5 2 2 1.2 2-.5 2 3.5-1.5 1.5v2.6l1.5 1.5-2 3.5-2-.5-2 1.2-.5 2h-4l-.5-2-2-1.2-2 .5-2-3.5L5 12.8v-2.6L3.5 8.7l2-3.5 2 .5Z"/><circle cx="12" cy="11.5" r="3"/></svg>
+            <span class="sterile-only">外观与设置</span>
           </button>
           <button id="refreshButton" class="icon-button" title="重新抓取成绩" aria-label="重新抓取成绩">
-            <span>↻</span>
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9"/></svg>
+            <span class="sterile-only">刷新成绩</span>
           </button>
         </div>
       </section>
 
+      <div class="sterile-only sterile-overview-meta" aria-label="学习记录概况">
+        <span class="sterile-connection"><i aria-hidden="true"></i><span id="sterileDataState" role="status">等待连接 WebTESS</span></span>
+        <span class="sterile-counts"><span><strong id="sterileCourseCount">0</strong> 门课程</span><span><strong id="sterileAssignmentCount">0</strong> 项成绩</span></span>
+      </div>
+
       <section class="workspace">
         <form id="scrapeForm" class="panel login-panel" method="post" autocomplete="on" action="/api/scrape">
           <div class="panel-head">
-            <h2>WebTESS</h2>
+            <h2>连接 WebTESS</h2>
             <span id="status" class="status">待连接</span>
           </div>
+          <div class="connection-fields">
           <label>
             <span>WebTESS 邮箱</span>
             <input id="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="name@example.com" />
           </label>
           <label>
             <span>密码</span>
-            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="local only" />
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="输入 WebTESS 密码" />
           </label>
           <button class="primary" type="submit">抓取并更新</button>
+          </div>
+          <p class="sterile-only sterile-login-note"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4M12 14v3"/></svg><span>默认仅用于本次连接；开启通知 Beta 时需另行授权。</span></p>
         </form>
 
         <section class="panel average-panel">
           <div class="panel-head">
-            <h2>四科均分</h2>
-            <span id="selectionCount" class="status">0 / 4</span>
-          </div>
-          <div class="average-value" id="averageValue">--</div>
-          <p id="averageFormula" class="muted">选择四科后计算</p>
-          <div id="subjectPicker" class="subject-picker"></div>
+            <h2>课程总览</h2>
+<div class="average-actions">
           <div class="layout-actions">
             <button id="copyLayoutButton" class="ghost compact" type="button">复制布局链接</button>
             <details class="layout-help">
@@ -61,11 +82,25 @@
               <p data-human-text="以后打开这个复制的链接就行了">Safari 有时不会稳定记住你展示的四门课。这个功能会把当前展示课程写进网址里的 show 参数。复制或收藏这个链接，下次打开就会恢复同样的四门课。</p>
             </details>
           </div>
+            <span id="selectionCount" class="status">0 / 4</span>
+</div>
+          </div>
+          <div class="average-overview">
+            <span class="sterile-only average-label">四科均分</span>
+            <div class="average-value" id="averageValue">--</div>
+            <span class="sterile-only average-caption">按各科整数成绩计算</span>
+          </div>
+          <div class="average-courses">
+          <div id="subjectPicker" class="subject-picker"></div>
+          <div class="sterile-only sterile-empty-courses" aria-hidden="true"><div><span>课程 01</span><strong>—</strong></div><div><span>课程 02</span><strong>—</strong></div><div><span>课程 03</span><strong>—</strong></div><div><span>课程 04</span><strong>—</strong></div></div>
+
+          </div>
+          <p id="averageFormula" class="muted">选择四科后计算</p>
         </section>
 
-        <section class="panel table-panel">
+        <section id="gradeDetails" class="panel table-panel">
           <div class="panel-head">
-            <h2>显示科目明细</h2>
+            <h2>科目明细</h2>
             <button id="exportButton" class="ghost compact" type="button">导出 JSON</button>
           </div>
           <section id="effortCard" class="effort-card" aria-labelledby="effortCardTitle" hidden>
@@ -114,6 +149,8 @@
               <option value="">抓取成绩后选择</option>
             </select>
           </label>
+          <p class="sterile-only table-scroll-note">横向滚动查看全部列</p>
+          <div class="detail-content">
           <div class="table-wrap details-wrap">
             <table class="grade-table">
               <colgroup>
@@ -135,15 +172,18 @@
               <tbody id="gradeRows"></tbody>
             </table>
           </div>
-          <div id="assignmentChart" class="assignment-chart" aria-label="作业权重环形图"></div>
+          <aside class="assignment-breakdown">
+            <div class="sterile-only breakdown-heading"><h3>作业权重</h3></div>
+            <div id="assignmentChart" class="assignment-chart" aria-label="作业权重环形图"></div>
+          </aside>
+          </div>
         </section>
 
-        <section class="panel history-panel">
+        <section id="gradeHistory" class="panel history-panel">
           <div class="panel-head">
             <h2>成绩走势</h2>
             <span id="historyStatus" class="status">等待抓取</span>
           </div>
-          <p class="muted" data-human-text="历史记录功能用的是你的 WebTESS 密码，而且很神秘。你改了 WebTESS 密码可能没办法用了就">历史记录只会用你当次输入的 WebTESS 邮箱和密码在浏览器里解密。WebTESS 密码不保存；如果密码改变，旧历史可能无法解密。</p>
           <div class="history-market-head">
             <label class="history-subject-field">
               <span>查看科目</span>
@@ -156,6 +196,9 @@
           <div id="historyChart" class="history-chart">
             <p class="muted chart-empty">成功抓取一次后会建立加密历史基准。</p>
           </div>
+          <div class="history-data-note">
+          <p class="muted" data-human-text="历史记录功能用的是你的 WebTESS 密码，而且很神秘。你改了 WebTESS 密码可能没办法用了就">历史记录只会用你当次输入的 WebTESS 邮箱和密码在浏览器里解密。WebTESS 密码不保存；如果密码改变，旧历史可能无法解密。</p>
+          </div>
           <div class="layout-actions">
             <button id="historyExportButton" class="ghost compact" type="button">导出加密备份</button>
             <button id="historyDeleteButton" class="ghost compact danger" type="button">删除所有历史</button>
@@ -166,7 +209,7 @@
           </details>
         </section>
 
-        <section class="panel prediction-panel">
+        <section id="gradePrediction" class="panel prediction-panel">
           <div class="panel-head">
             <div class="prediction-title">
               <h2>成绩预测</h2>
@@ -281,6 +324,11 @@
         <fieldset class="theme-fieldset">
           <legend>主题</legend>
           <div class="theme-options">
+            <label class="theme-option" data-theme-preview="sterile">
+              <input type="radio" name="theme" value="sterile" />
+              <span class="theme-swatch" aria-hidden="true"></span>
+              <span class="theme-copy"><strong>sterile</strong><small>简洁中性色、舒适的留白与清晰的数据层次</small></span>
+            </label>
             <label class="theme-option" data-theme-preview="system">
               <input type="radio" name="theme" value="system" />
               <span class="theme-swatch" aria-hidden="true"></span>
@@ -309,6 +357,7 @@
           </div>
         </fieldset>
         <p class="settings-note">选择后立即应用，并保存在当前浏览器中。</p>
+        <div class="settings-onboarding-entry"><span>第一次使用，或想了解更多？</span><button class="ghost compact" type="button" data-open-onboarding>重新查看新手引导</button></div>
         <fieldset class="market-mode-fieldset">
           <legend>涨跌颜色</legend>
           <div class="market-mode-options">

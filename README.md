@@ -139,7 +139,24 @@ History derives each encryption key once per salt per refresh.
 Run `npm test` for parser, change tracking, refresh coordination, prediction,
 credential, and notification regression tests. These tests use synthetic data.
 
-## Realtime notification setup
+## Appearance and Getting Started
+
+The new **sterile** appearance is the default for new visitors. Select it in
+**外观与设置 → 主题**, or open `?theme=sterile`. It uses a new layout with a
+horizontal account connection bar, a combined average beside course cards,
+the full-width assignment spreadsheet immediately after the overview, its weight
+breakdown below, and history and prediction together afterward. All grade fields,
+formulas, history actions, explanations, exports,
+notification settings, and competency progress remain available. Existing
+browser theme choices are respected.
+
+This is a native HTML/CSS implementation informed by card, button, input, tabs,
+and empty-state patterns retrieved through the official
+[shadcn MCP server](https://ui.shadcn.com/docs/mcp). It does not require React.
+
+A three-step welcome guide appears on first use. Completing or skipping it stores
+only `grade-onboarding-v1` in local storage. Replay it from settings with
+**重新查看新手引导**. Trying the sterile theme in the guide is optional.
 
 Realtime notification setup now displays the invitation field and unmet
 requirements before enabling the checkbox. Local eligibility checks cover input

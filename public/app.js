@@ -5,6 +5,8 @@ import {
   sortEffortColumnsFirst
 } from './effort-progress.js';
 import { createRealtimeController, registerPushWorker } from './realtime-ui.js';
+import { initializeOnboarding } from './onboarding.js';
+import { initializeSterileNavigation, normalizeThemeChoice, updateSterileSummary } from './sterile-theme.js';
 import { getPredictionCategories, predictCourseScore } from './prediction.js';
 import { renderHistoryTooltip } from './history-tooltip.js';
 import { storeBrowserCredential } from './browser-credentials.js';
@@ -115,6 +117,7 @@ let realtimePublicKey = '';
 let realtimeController = null;
 let settingsPreviousFocus = null;
 let settingsPreviousOverflow = '';
+let historyResizeTimer;
 let pushDeviceIdMemory = '';
 let changelogLoaded = false;
 
@@ -148,15 +151,15 @@ function setStatus(text, tone = '') {
 }
 
 function loadTheme() {
-  const fromUrl = new URLSearchParams(window.location.search).get('theme');
+  const fromUrl = normalizeThemeChoice(new URLSearchParams(window.location.search).get('theme'));
   if (isThemeChoice(fromUrl)) return fromUrl;
   try {
-    const saved = localStorage.getItem('grade-theme');
+    const saved = normalizeThemeChoice(localStorage.getItem('grade-theme'));
     if (isThemeChoice(saved)) return saved;
   } catch {
     // Ignore storage failures in strict privacy modes.
   }
-  return 'system';
+  return 'sterile';
 }
 
 function applyTheme(theme, writeUrl = true) {
@@ -166,7 +169,9 @@ function applyTheme(theme, writeUrl = true) {
     : nextChoice;
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.dataset.themeChoice = nextChoice;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'sterile' ? '#fafafa' : resolvedTheme === 'light' ? '#eceff1' : resolvedTheme === 'webtess' ? '#79c8f1' : '#050505');
   for (const option of els.themeOptions) option.checked = option.value === nextChoice;
+  if (state.historySnapshots.length) renderHistoryChart();
   try {
     localStorage.setItem('grade-theme', nextChoice);
   } catch {
@@ -179,7 +184,7 @@ function applyTheme(theme, writeUrl = true) {
 }
 
 function isThemeChoice(value) {
-  return ['system', 'light', 'dark', 'webtess', 'hacker'].includes(value);
+  return ['system', 'light', 'dark', 'webtess', 'hacker', 'sterile'].includes(value);
 }
 
 function loadMarketMode() {
@@ -233,6 +238,7 @@ function openSettings() {
   settingsPreviousOverflow = document.body.style.overflow;
   document.body.style.overflow = 'hidden';
   document.querySelector('.shell').inert = true;
+  document.querySelector('.sterile-masthead').inert = true;
   els.settingsModal.hidden = false;
   realtimeController?.updatePrerequisites();
   els.settingsCloseButton?.focus();
@@ -243,6 +249,7 @@ function closeSettings() {
   els.settingsModal.hidden = true;
   document.body.style.overflow = settingsPreviousOverflow;
   document.querySelector('.shell').inert = false;
+  document.querySelector('.sterile-masthead').inert = false;
   (settingsPreviousFocus?.isConnected ? settingsPreviousFocus : els.settingsButton)?.focus({ preventScroll: true });
 }
 
@@ -614,6 +621,7 @@ function setupHumanTranslations() {
 }
 
 function render() {
+  updateSterileSummary(state.grades, state.effortIsDemo);
   ensureDetailSubject();
   renderPicker();
   renderAverage();
@@ -826,7 +834,17 @@ function renderPicker() {
     button.dataset.active = selected;
     button.setAttribute('aria-pressed', selected ? 'true' : 'false');
     button.setAttribute('aria-label', `${selected ? '已选' : '未选'} · ${grade.subject} ${formatCourseScore(grade.score)}`);
-    button.textContent = `${grade.subject} ${formatCourseScore(grade.score)}`;
+    const subject = document.createElement('span');
+    subject.className = 'subject-chip-name';
+    subject.textContent = grade.subject;
+    const score = document.createElement('span');
+    score.className = 'subject-chip-score';
+    score.textContent = formatCourseScore(grade.score);
+    button.append(subject, document.createTextNode(' '), score);
+    const meta = document.createElement('span');
+    meta.className = 'sterile-only subject-chip-meta';
+    meta.textContent = `${grade.assignments.length} 项成绩`;
+    button.append(meta);
     button.addEventListener('click', () => toggleSubject(grade.subject));
     els.subjectPicker.append(button);
   }
@@ -1628,7 +1646,11 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
     if (els.historySummary) els.historySummary.hidden = true;
     return;
   }
-  const width = Math.max(920, points.length * 38 + 78);
+  const fitChart = document.documentElement.dataset.theme === 'sterile';
+  const minChartWidth = fitChart
+    ? Math.max(280, Math.max(0, points.length - 1) * 38 + 78)
+    : Math.max(920, points.length * 38 + 78);
+  const width = Math.max(minChartWidth, fitChart ? els.historyChart.clientWidth : 0);
   const height = 310;
   const plot = { left: 54, right: 24, top: 28, bottom: 46 };
 
@@ -1689,7 +1711,7 @@ function renderHistoryChart(snapshots = state.historySnapshots, options = {}) {
   }).join('');
 
   els.historyChart.innerHTML = `
-    <svg class="history-svg" style="min-width: ${width}px" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(subject)}成绩历史走势">
+    <svg class="history-svg" style="min-width: ${minChartWidth}px" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(subject)}成绩历史走势">
       <defs>
         <linearGradient id="historyAreaGradient" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color="currentColor" stop-opacity="0.28"></stop>
@@ -2163,7 +2185,13 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('pointerdown', (event) => {
   if (!event.target.closest?.('.history-event-target, .history-tooltip')) hideHistoryTooltip(true);
 });
-window.addEventListener('resize', () => hideHistoryTooltip(true));
+window.addEventListener('resize', () => {
+  hideHistoryTooltip(true);
+  clearTimeout(historyResizeTimer);
+  if (document.documentElement.dataset.theme === 'sterile' && state.historySnapshots.length) {
+    historyResizeTimer = setTimeout(() => renderHistoryChart(), 120);
+  }
+});
 document.addEventListener('scroll', (event) => {
   if (!els.historyTooltip?.contains(event.target)) hideHistoryTooltip(true);
 }, true);
@@ -2232,3 +2260,5 @@ loadBrowserCredential();
 initializeRealtimeBeta();
 
 render();
+initializeSterileNavigation();
+initializeOnboarding({ openSettings, closeSettings, applyTheme });
