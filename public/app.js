@@ -8,7 +8,7 @@ import { createRealtimeController, registerPushWorker } from './realtime-ui.js';
 import { initializeOnboarding } from './onboarding.js';
 import { initializeSterileNavigation, normalizeThemeChoice, updateSterileSummary } from './sterile-theme.js';
 import { getPredictionCategories, predictCourseScore } from './prediction.js';
-import { renderHistoryTooltip } from './history-tooltip.js';
+import { historyTooltipPlacement, renderHistoryTooltip, updateHistoryTooltipScroll } from './history-tooltip.js';
 import { storeBrowserCredential } from './browser-credentials.js';
 import { createGradeCelebration } from './grade-celebration.js';
 import { diffGradeSnapshots } from './grade-changes.js';
@@ -1794,15 +1794,28 @@ function bindHistoryPointTooltips(points, subject) {
     });
     tooltip.style.visibility = 'hidden';
     tooltip.hidden = false;
-    tooltip.style.transform = 'none';
-    const tooltipWidth = tooltip.offsetWidth;
-    const tooltipHeight = tooltip.offsetHeight;
-    const left = clamp(rect.left + rect.width / 2 - tooltipWidth / 2, 12, Math.max(12, window.innerWidth - tooltipWidth - 12));
-    const above = rect.top - tooltipHeight - 12;
-    const below = rect.bottom + 12;
-    const top = clamp(above >= 12 ? above : below, 12, Math.max(12, window.innerHeight - tooltipHeight - 12));
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
+    tooltip.style.maxHeight = '';
+    const chartRect = els.historyChart.getBoundingClientRect();
+    const pointRects = [...els.historyChart.querySelectorAll('.history-point')]
+      .map((node) => node.getBoundingClientRect())
+      .filter((point) => point.right > chartRect.left && point.left < chartRect.right
+        && point.bottom > 0 && point.top < window.innerHeight);
+    const placement = historyTooltipPlacement({
+      anchor: rect,
+      points: pointRects,
+      width: tooltip.offsetWidth,
+      height: tooltip.offsetHeight,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight
+    });
+    if (!placement) {
+      hideHistoryTooltip(true);
+      return;
+    }
+    tooltip.style.maxHeight = `${placement.height}px`;
+    tooltip.style.left = `${placement.left}px`;
+    tooltip.style.top = `${placement.top}px`;
+    updateHistoryTooltipScroll(tooltip);
     tooltip.style.visibility = 'visible';
   };
   for (const node of els.historyChart.querySelectorAll('.history-event-target')) {
@@ -2197,6 +2210,10 @@ document.addEventListener('scroll', (event) => {
 }, true);
 els.historyTooltip?.addEventListener('pointerenter', cancelHistoryTooltipHide);
 els.historyTooltip?.addEventListener('pointerleave', scheduleHistoryTooltipHide);
+els.historyTooltip?.addEventListener('focusin', cancelHistoryTooltipHide);
+els.historyTooltip?.addEventListener('focusout', (event) => {
+  if (!els.historyTooltip.contains(event.relatedTarget)) scheduleHistoryTooltipHide();
+});
 els.refreshButton.addEventListener('click', () => {
   if (els.email.value.trim() && els.password.value) {
     els.form.requestSubmit();

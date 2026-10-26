@@ -7,6 +7,50 @@ function element(tag, className, text) {
   return node;
 }
 
+export function historyTooltipPlacement({ anchor, points, width, height, viewportWidth, viewportHeight }) {
+  const margin = 12;
+  const gap = 12;
+  const limit = viewportHeight - margin;
+  const fitLeft = (left) => Math.max(margin, Math.min(left, viewportWidth - width - margin));
+  const centerX = (anchor.left + anchor.right) / 2;
+  const centerY = (anchor.top + anchor.bottom) / 2;
+  const centeredLeft = fitLeft(centerX - width / 2);
+  const candidates = [];
+
+  for (const left of new Set([centeredLeft, fitLeft(anchor.right + gap), fitLeft(anchor.left - width - gap)])) {
+    const obstacles = [...points, anchor]
+      .filter((point) => point.right + gap > left && point.left - gap < left + width)
+      .map((point) => ({ top: Math.max(margin, point.top - gap), bottom: Math.min(limit, point.bottom + gap) }))
+      .filter((point) => point.bottom > margin && point.top < limit)
+      .sort((a, b) => a.top - b.top);
+    let start = margin;
+    const addCandidate = (end) => {
+      const availableHeight = Math.min(height, end - start);
+      if (availableHeight <= 0) return;
+      const top = Math.max(start, Math.min(centerY - availableHeight / 2, end - availableHeight));
+      const distance = (left + width / 2 - centerX) ** 2 + (top + availableHeight / 2 - centerY) ** 2;
+      candidates.push({ left, top, height: availableHeight, distance });
+    };
+    for (const obstacle of obstacles) {
+      addCandidate(obstacle.top);
+      start = Math.max(start, obstacle.bottom);
+    }
+    addCandidate(limit);
+  }
+
+  const rank = (a, b) => b.height - a.height || a.distance - b.distance;
+  // Keep the usual vertical path from the point to the card when it is readable.
+  const centered = candidates.filter((candidate) => candidate.left === centeredLeft).sort(rank)[0];
+  const best = centered?.height >= Math.min(180, height) ? centered : candidates.sort(rank)[0];
+  return best && { left: best.left, top: best.top, height: best.height };
+}
+
+export function updateHistoryTooltipScroll(tooltip) {
+  const scroll = tooltip.querySelector('.history-tooltip-scroll');
+  tooltip.dataset.scrollTop = String(scroll.scrollTop > 1);
+  tooltip.dataset.scrollBottom = String(scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop > 1);
+}
+
 function changeTable(events, columns) {
   const table = element('table', 'history-change-table');
   const head = element('thead');
@@ -33,6 +77,13 @@ function changeTable(events, columns) {
 
 export function renderHistoryTooltip(tooltip, { subject, score, previousScore, capturedAt, dateLabel, events, onClose }) {
   tooltip.replaceChildren();
+  tooltip.dataset.scrollTop = 'false';
+  tooltip.dataset.scrollBottom = 'false';
+  const scroll = element('div', 'history-tooltip-scroll');
+  scroll.tabIndex = 0;
+  scroll.setAttribute('role', 'region');
+  scroll.setAttribute('aria-label', '成绩变化详情，可滚动查看更多');
+  scroll.addEventListener('scroll', () => updateHistoryTooltipScroll(tooltip), { passive: true });
   const header = element('div', 'history-tooltip-header');
   const context = element('div');
   context.append(element('strong', 'history-tooltip-subject', subject));
@@ -85,5 +136,6 @@ export function renderHistoryTooltip(tooltip, { subject, score, previousScore, c
   for (const event of events.filter((event) => event.type === 'note')) {
     changes.append(element('p', 'history-tooltip-note', event.text));
   }
-  tooltip.append(header, summary, changes);
+  scroll.append(header, summary, changes);
+  tooltip.append(scroll);
 }

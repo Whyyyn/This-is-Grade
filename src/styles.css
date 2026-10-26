@@ -1675,12 +1675,11 @@ tbody tr:nth-child(even) td {
   display: flex;
   flex-direction: column;
   width: min(440px, calc(100vw - 24px));
-  max-height: min(620px, calc(100vh - 24px));
-  max-height: min(620px, calc(100dvh - 24px));
+  max-height: min(360px, calc(100vh - 24px));
+  max-height: min(360px, calc(100dvh - 24px));
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  padding: 16px;
   color: var(--fg);
   background: color-mix(in srgb, var(--bg) 96%, transparent);
   box-shadow: 0 16px 46px color-mix(in srgb, #000 30%, transparent);
@@ -1702,6 +1701,73 @@ tbody tr:nth-child(even) td {
 
 .history-tooltip[hidden] {
   display: none;
+}
+
+.history-tooltip::before,
+.history-tooltip::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  right: 10px;
+  left: 0;
+  height: 18px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.history-tooltip::before {
+  top: 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--fg) 18%, transparent), transparent);
+}
+
+.history-tooltip::after {
+  bottom: 0;
+  background: linear-gradient(to top, color-mix(in srgb, var(--fg) 18%, transparent), transparent);
+}
+
+.history-tooltip[data-scroll-top="true"]::before,
+.history-tooltip[data-scroll-bottom="true"]::after {
+  opacity: 1;
+}
+
+.history-tooltip-scroll {
+  min-height: 0;
+  padding: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg) 48%, transparent) color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.history-tooltip-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.history-tooltip-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-tooltip-scroll::-webkit-scrollbar-track {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.history-tooltip-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--fg) 48%, transparent);
+  background-clip: padding-box;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  .history-tooltip-scroll {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
 }
 
 .history-tooltip-header {
@@ -1782,12 +1848,7 @@ tbody tr:nth-child(even) td {
 }
 
 .history-tooltip-changes {
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  touch-action: pan-y;
-  scrollbar-width: thin;
-  scrollbar-gutter: stable;
+  display: flow-root;
 }
 
 .history-change-section {
